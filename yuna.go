@@ -1,30 +1,26 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"strings"
 )
 
 type person struct {
-	discordID string
-	names     []string
-	prefname  string
+	DiscordID string   `json:"discordID"`
+	Names     []string `json:"names"`
+	Prefname  string   `json:"prefname"`
 }
 
 type data struct {
-	people []person
+	People []person `json:"people"`
 }
 
 func main() {
-	object := data{
-		people: []person{
-			person{
-				prefname:  "Josh",
-				names:     []string{"Josh", "Rippey", "Eragon"},
-				discordID: "210220334756921345"},
-			person{
-				prefname:  "Rachel",
-				discordID: "226895271022428160"}}}
+	object := getData("./data.json")
+
 	command := "Yuna, mute Eragon."
 	interpret(command, object)
 }
@@ -48,11 +44,11 @@ func interpret(command string, data data) {
 			fmt.Println("keyword mute detected")
 			target := s[i+1]
 			discordID := ""
-			for _, person := range data.people {
-				for _, name := range person.names {
+			for _, person := range data.People {
+				for _, name := range person.Names {
 					if name == target {
-						fmt.Println("Target match: " + person.prefname)
-						discordID = person.discordID
+						fmt.Println("Target match: " + person.Prefname)
+						discordID = person.DiscordID
 					}
 				}
 			}
@@ -62,4 +58,16 @@ func interpret(command string, data data) {
 			fmt.Println("")
 		}
 	}
+}
+
+func getData(path string) data {
+	raw, err := ioutil.ReadFile(path)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+
+	var c data
+	json.Unmarshal(raw, &c)
+	return c
 }
