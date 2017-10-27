@@ -18,11 +18,13 @@ type data struct {
 	People []person `json:"people"`
 }
 
+var rundata data
+
 func main() {
-	data := getData("./data.json")
+	rundata = getData("./data.json")
 
 	command := "Yuna, mute adria."
-	interpret(command, data)
+	interpret(command)
 }
 
 func sanitize(s string) []string {
@@ -35,7 +37,7 @@ func sanitize(s string) []string {
 	return words
 }
 
-func interpret(command string, data data) {
+func interpret(command string) {
 	s := sanitize(command)
 	for i, word := range s {
 		word = strings.ToLower(word)
@@ -44,7 +46,7 @@ func interpret(command string, data data) {
 			fmt.Println("keyword mute detected")
 			target := s[i+1]
 			discordID := ""
-			for _, person := range data.People {
+			for _, person := range rundata.People {
 				for _, name := range person.Names {
 					if strings.ToLower(name) == strings.ToLower(target) {
 						fmt.Println("Target match: " + person.Prefname)
@@ -54,6 +56,8 @@ func interpret(command string, data data) {
 			}
 			fmt.Println("Muting ID " + string(discordID))
 			return
+		case "shutdown":
+			shutdown()
 		default:
 
 		}
@@ -70,4 +74,17 @@ func getData(path string) data {
 	var c data
 	json.Unmarshal(raw, &c)
 	return c
+}
+
+func saveData(path string) {
+	dat, err := json.Marshal(rundata)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	ioutil.WriteFile(path, dat, 0644)
+}
+
+func shutdown(){
+	saveData("./data.json")
+	
 }
