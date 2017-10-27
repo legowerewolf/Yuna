@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	
+	"github.com/bwmarrin/discordgo"
 )
 
 type person struct {
@@ -15,13 +17,18 @@ type person struct {
 }
 
 type data struct {
+	ApiToken string `json:"apitoken"`
 	People []person `json:"people"`
 }
 
 var rundata data
+var client Session
 
 func main() {
 	rundata = getData("./data.json")
+	
+	client = discordgo.New(rundata.ApiToken)
+	discord.Open()
 
 	command := "Yuna, mute adria."
 	interpret(command)
@@ -85,6 +92,7 @@ func saveData(path string) {
 }
 
 func shutdown(){
+	client.Close()
 	saveData("./data.json")
 	
 }
