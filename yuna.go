@@ -19,10 +19,10 @@ type data struct {
 }
 
 func main() {
-	object := getData("./data.json")
+	data := getData("./data.json")
 
-	command := "Yuna, mute Eragon."
-	interpret(command, object)
+	command := "Yuna, mute adria."
+	interpret(command, data)
 }
 
 func sanitize(s string) []string {
@@ -46,7 +46,7 @@ func interpret(command string, data data) {
 			discordID := ""
 			for _, person := range data.People {
 				for _, name := range person.Names {
-					if name == target {
+					if strings.ToLower(name) == strings.ToLower(target) {
 						fmt.Println("Target match: " + person.Prefname)
 						discordID = person.DiscordID
 					}
@@ -55,7 +55,7 @@ func interpret(command string, data data) {
 			fmt.Println("Muting ID " + string(discordID))
 			return
 		default:
-			fmt.Println("")
+
 		}
 	}
 }
