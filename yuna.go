@@ -13,7 +13,6 @@ import (
 type person struct {
 	DiscordID string   `json:"discordID"`
 	Names     []string `json:"names"`
-	Prefname  string   `json:"prefname"`
 }
 
 type data struct {
@@ -51,17 +50,16 @@ func interpret(command string) {
 		switch word {
 		case "mute":
 			fmt.Println("keyword mute detected")
-			target := s[i+1]
-			discordID := ""
-			for _, person := range rundata.People {
-				for _, name := range person.Names {
-					if strings.ToLower(name) == strings.ToLower(target) {
-						fmt.Println("Target match: " + person.Prefname)
-						discordID = person.DiscordID
-					}
+			if (isValueInList("and", s[i+1:])){
+				andindex := isValueInList("and", s[i+1:])
+				for _, alias := range s[i+1, andindex + i] {
+					mute(alias)
 				}
+				mute(s[andindex+1])
 			}
-			fmt.Println("Muting ID " + string(discordID))
+			else {
+				mute(s[i+1])
+			}
 			return
 		case "shutdown":
 			shutdown()
@@ -89,6 +87,32 @@ func saveData(path string) {
 		fmt.Println(err.Error())
 	}
 	ioutil.WriteFile(path, dat, 0644)
+}
+
+func getPersonFromAlias(alias string) person {
+	for _, person := range rundata.People {
+				for _, name := range person.Names {
+					if strings.ToLower(name) == strings.ToLower(alias) {
+						fmt.Println("Target match: " + person.Names[0])
+						return person
+					}
+				}
+			}
+	return nil
+}
+
+func isValueInList(value string, list []string) bool {
+    for i, v := range list {
+        if v == value {
+            return i
+        }
+    }
+    return -1
+}
+
+func mute(alias string) {
+	discordID := getPersonFromAlias(target).DiscordID
+	fmt.Println("Muting ID " + string(discordID))
 }
 
 func shutdown(){
