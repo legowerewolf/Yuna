@@ -91,13 +91,13 @@ func saveData(path string) {
 
 func getPersonFromAlias(alias string) person {
 	for _, person := range rundata.People {
-				for _, name := range person.Names {
-					if strings.ToLower(name) == strings.ToLower(alias) {
-						fmt.Println("Target match: " + person.Names[0])
-						return person
-					}
-				}
+		for _, name := range person.Names {
+			if strings.ToLower(name) == strings.ToLower(alias) {
+				fmt.Println("Target match: " + person.Names[0])
+				return person
 			}
+		}
+	}
 	return nil
 }
 
