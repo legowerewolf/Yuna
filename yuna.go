@@ -2,10 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -27,11 +31,18 @@ func main() {
 	rundata = getData("./data.json")
 
 	client, err := discordgo.New(rundata.APIToken)
-	err.handle()
+	checkErr(err)
 	client.Open()
 
 	command := "Yuna, mute adria."
 	interpret(command)
+
+	fmt.Println("Bot is now running.  Press CTRL-C to exit.")
+	sc := make(chan os.Signal, 1)
+	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
+	<-sc
+
+	shutdown()
 }
 
 func sanitize(s string) []string {
@@ -51,7 +62,7 @@ func interpret(command string) {
 		switch word {
 		case "mute":
 			fmt.Println("keyword mute detected")
-			if isValueInList("and", s[i+1:]) {
+			if isValueInList("and", s[i+1:]) != -1 {
 				andindex := isValueInList("and", s[i+1:])
 				for _, alias := range s[i+1 : andindex+i] {
 					mute(alias)
@@ -89,19 +100,19 @@ func saveData(path string) {
 	ioutil.WriteFile(path, dat, 0644)
 }
 
-func getPersonFromAlias(alias string) person {
+func getPersonFromAlias(alias string) (person, error) {
 	for _, person := range rundata.People {
 		for _, name := range person.Names {
 			if strings.ToLower(name) == strings.ToLower(alias) {
 				fmt.Println("Target match: " + person.Names[0])
-				return person
+				return person, nil
 			}
 		}
 	}
-	return nil
+	return person{}, errors.New("Could not find person with alias: " + alias)
 }
 
-func isValueInList(value string, list []string) bool {
+func isValueInList(value string, list []string) int {
 	for i, v := range list {
 		if v == value {
 			return i
@@ -111,7 +122,12 @@ func isValueInList(value string, list []string) bool {
 }
 
 func mute(alias string) {
-	discordID := getPersonFromAlias(alias).DiscordID
+	aperson, err := getPersonFromAlias(alias)
+	if err != nil {
+		checkErr(err)
+		return
+	}
+	discordID := aperson.DiscordID
 	fmt.Println("Muting ID " + string(discordID))
 }
 
@@ -119,4 +135,10 @@ func shutdown() {
 	client.Close()
 	saveData("./data.json")
 
+}
+
+func checkErr(err error) {
+	if err != nil {
+		log.Fatal("ERROR:", err)
+	}
 }
