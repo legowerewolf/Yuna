@@ -33,7 +33,9 @@ func main() {
 	client, err := discordgo.New(rundata.APIToken)
 	checkErr(err)
 	client.Open()
+	defer shutdown()
 
+	interpret("Mute Rachel, Josh, and Rachel")
 	//register listeners here
 
 	fmt.Println("Yuna is now online.  Press CTRL-C to shut down.")
@@ -60,14 +62,8 @@ func interpret(command string) {
 		word = strings.ToLower(word)
 		switch word {
 		case "mute":
-			if isValueInList("and", s[i+1:]) != -1 {
-				andindex := isValueInList("and", s[i+1:])
-				for _, alias := range s[i+1 : andindex+i+1] {
-					mute(alias)
-				}
-				mute(s[andindex+i+2])
-			} else {
-				mute(s[i+1])
+			for _, user := range getPeopleFromSlice(s[i+1:]) {
+				mute(user.DiscordID)
 			}
 			return
 		case "shutdown":
@@ -90,13 +86,27 @@ func getPersonFromAlias(alias string) (person, error) {
 	return person{}, errors.New("Could not find person with alias: " + alias)
 }
 
-func mute(alias string) error {
-	aperson, err := getPersonFromAlias(alias)
-	if err != nil {
-		return err
+func getPeopleFromSlice(s []string) []person {
+	ret := []person{}
+	if isValueInList("and", s) != -1 {
+		andindex := isValueInList("and", s)
+		for _, alias := range append(s[:andindex+1], s[andindex+1]) {
+			nperson, err := getPersonFromAlias(alias)
+			if err == nil {
+				ret = append(ret, nperson)
+			}
+		}
+	} else {
+		nperson, err := getPersonFromAlias(s[1])
+		if err == nil {
+			ret = append(ret, nperson)
+		}
 	}
-	discordID := aperson.DiscordID
-	fmt.Println("Muting ID " + string(discordID))
+	return ret
+}
+
+func mute(discordID string) error {
+	fmt.Println("Muting ID " + discordID)
 	return nil
 }
 
