@@ -34,10 +34,9 @@ func main() {
 	checkErr(err)
 	client.Open()
 
-	command := "Yuna, mute adria."
-	interpret(command)
+	//register listeners here
 
-	fmt.Println("Bot is now running.  Press CTRL-C to exit.")
+	fmt.Println("Yuna is now online.  Press CTRL-C to shut down.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
@@ -61,13 +60,12 @@ func interpret(command string) {
 		word = strings.ToLower(word)
 		switch word {
 		case "mute":
-			fmt.Println("keyword mute detected")
 			if isValueInList("and", s[i+1:]) != -1 {
 				andindex := isValueInList("and", s[i+1:])
-				for _, alias := range s[i+1 : andindex+i] {
+				for _, alias := range s[i+1 : andindex+i+1] {
 					mute(alias)
 				}
-				mute(s[andindex+1])
+				mute(s[andindex+i+2])
 			} else {
 				mute(s[i+1])
 			}
@@ -79,6 +77,36 @@ func interpret(command string) {
 		}
 	}
 }
+
+func getPersonFromAlias(alias string) (person, error) {
+	for _, person := range rundata.People {
+		for _, name := range person.Names {
+			if strings.ToLower(name) == strings.ToLower(alias) {
+				fmt.Println("Target match: " + person.Names[0])
+				return person, nil
+			}
+		}
+	}
+	return person{}, errors.New("Could not find person with alias: " + alias)
+}
+
+func mute(alias string) error {
+	aperson, err := getPersonFromAlias(alias)
+	if err != nil {
+		return err
+	}
+	discordID := aperson.DiscordID
+	fmt.Println("Muting ID " + string(discordID))
+	return nil
+}
+
+func shutdown() { //Shutdown the discord connection and save data
+	client.Close()
+	saveData("./data.json")
+
+}
+
+//Functions to load and save data
 
 func getData(path string) data {
 	raw, err := ioutil.ReadFile(path)
@@ -100,17 +128,7 @@ func saveData(path string) {
 	ioutil.WriteFile(path, dat, 0644)
 }
 
-func getPersonFromAlias(alias string) (person, error) {
-	for _, person := range rundata.People {
-		for _, name := range person.Names {
-			if strings.ToLower(name) == strings.ToLower(alias) {
-				fmt.Println("Target match: " + person.Names[0])
-				return person, nil
-			}
-		}
-	}
-	return person{}, errors.New("Could not find person with alias: " + alias)
-}
+//Utility functions
 
 func isValueInList(value string, list []string) int {
 	for i, v := range list {
@@ -119,22 +137,6 @@ func isValueInList(value string, list []string) int {
 		}
 	}
 	return -1
-}
-
-func mute(alias string) {
-	aperson, err := getPersonFromAlias(alias)
-	if err != nil {
-		checkErr(err)
-		return
-	}
-	discordID := aperson.DiscordID
-	fmt.Println("Muting ID " + string(discordID))
-}
-
-func shutdown() {
-	client.Close()
-	saveData("./data.json")
-
 }
 
 func checkErr(err error) {
