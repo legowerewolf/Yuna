@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
-	
+
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -17,18 +17,19 @@ type person struct {
 }
 
 type data struct {
-	ApiToken string `json:"apitoken"`
-	People []person `json:"people"`
+	APIToken string   `json:"apitoken"`
+	People   []person `json:"people"`
 }
 
 var rundata data
-var client Session
+var client discordgo.Session
 
 func main() {
 	rundata = getData("./data.json")
-	
-	client = discordgo.New(rundata.ApiToken)
-	discord.Open()
+
+	client, err := discordgo.New(rundata.APIToken)
+	err.handle()
+	client.Open()
 
 	command := "Yuna, mute adria."
 	interpret(command)
@@ -91,8 +92,8 @@ func saveData(path string) {
 	ioutil.WriteFile(path, dat, 0644)
 }
 
-func shutdown(){
+func shutdown() {
 	client.Close()
 	saveData("./data.json")
-	
+
 }
