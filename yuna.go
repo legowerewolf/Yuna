@@ -96,8 +96,9 @@ func interpret(command string, authorized bool) string {
 			}
 			ret := "Alright, I've muted: "
 			for _, user := range getPeopleFromSlice(s[i+1:]) {
-				mute(user)
-				ret += user.Names[0] + " "
+				fmt.Println(client)
+				_, err := client.GuildMember(rundata.GuildID, user.DiscordID)
+				checkErr(err)
 			}
 			return ret
 		case "shutdown":
@@ -142,8 +143,9 @@ func getPeopleFromSlice(s []string) []person {
 	return ret
 }
 
-func mute(user person) error {
-	fmt.Println("Muting ID " + user.DiscordID)
+func mute(user *discordgo.Member) error {
+	fmt.Println("Muting ID " + user.User.ID)
+	user.Mute = true
 	return nil
 }
 
