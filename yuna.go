@@ -30,13 +30,14 @@ var client discordgo.Session
 func main() {
 	rundata = getData("./data.json")
 
-	client, err := discordgo.New(rundata.APIToken)
+	client, err := discordgo.New("Bot " + rundata.APIToken)
 	checkErr(err)
+
+	//register listeners here
+	client.AddHandler(messageCreate)
+
 	client.Open()
 	defer shutdown()
-
-	interpret("Mute Rachel, Josh, and Rachel")
-	//register listeners here
 
 	fmt.Println("Yuna is now online.  Press CTRL-C to shut down.")
 	sc := make(chan os.Signal, 1)
@@ -56,29 +57,47 @@ func sanitize(s string) []string {
 	return words
 }
 
-func interpret(command string) {
+func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+
+	// Ignore all messages created by the bot itself
+	// This isn't required in this specific example but it's a good practice.
+	if m.Author.ID == s.State.User.ID {
+		return
+	}
+
+	// check if the message is "!airhorn"
+	if isValueInList("yuna", sanitize(strings.ToLower(m.Content))) != -1 {
+		_, err := s.ChannelMessageSend(m.ChannelID, interpret(m.Content))
+		checkErr(err)
+
+	}
+}
+
+func interpret(command string) string {
 	s := sanitize(command)
+	ret := ""
 	for i, word := range s {
 		word = strings.ToLower(word)
 		switch word {
 		case "mute":
+			ret += "Muted: "
 			for _, user := range getPeopleFromSlice(s[i+1:]) {
-				mute(user.DiscordID)
+				mute(user)
+				ret += user.Names[0] + " "
 			}
-			return
 		case "shutdown":
 			shutdown()
 		default:
 
 		}
 	}
+	return ret
 }
 
 func getPersonFromAlias(alias string) (person, error) {
 	for _, person := range rundata.People {
 		for _, name := range person.Names {
 			if strings.ToLower(name) == strings.ToLower(alias) {
-				fmt.Println("Target match: " + person.Names[0])
 				return person, nil
 			}
 		}
@@ -97,7 +116,7 @@ func getPeopleFromSlice(s []string) []person {
 			}
 		}
 	} else {
-		nperson, err := getPersonFromAlias(s[1])
+		nperson, err := getPersonFromAlias(s[0])
 		if err == nil {
 			ret = append(ret, nperson)
 		}
@@ -105,8 +124,8 @@ func getPeopleFromSlice(s []string) []person {
 	return ret
 }
 
-func mute(discordID string) error {
-	fmt.Println("Muting ID " + discordID)
+func mute(user person) error {
+	fmt.Println("Muting ID " + user.DiscordID)
 	return nil
 }
 
