@@ -21,6 +21,8 @@ type person struct {
 
 type data struct {
 	APIToken string   `json:"apitoken"`
+	GuildID  string   `json:"guildID"`
+	RoleID   string   `json:"roleID"`
 	People   []person `json:"people"`
 }
 
@@ -65,33 +67,49 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	// check if the message is "!airhorn"
-	if isValueInList("yuna", sanitize(strings.ToLower(m.Content))) != -1 {
-		_, err := s.ChannelMessageSend(m.ChannelID, interpret(m.Content))
+	mem, err := s.GuildMember(rundata.GuildID, m.Author.ID)
+	checkErr(err)
+
+	authorized := false
+	if indexOf(rundata.RoleID, mem.Roles) != -1 {
+		authorized = true
+	}
+
+	if indexOf("yuna", sanitize(strings.ToLower(m.Content))) != -1 {
+		_, err := s.ChannelMessageSend(m.ChannelID, interpret(m.Content, authorized))
 		checkErr(err)
 
 	}
 }
 
-func interpret(command string) string {
+func interpret(command string, authorized bool) string {
 	s := sanitize(command)
-	ret := ""
 	for i, word := range s {
 		word = strings.ToLower(word)
 		switch word {
 		case "mute":
-			ret += "Muted: "
+			if !authorized {
+				return "Sorry, I won't take that command from you."
+			}
+			if len(getPeopleFromSlice(s[i+1:])) == 0 {
+				return "Sorry, but I couldn't find anybody by that name. Try again?"
+			}
+			ret := "Alright, I've muted: "
 			for _, user := range getPeopleFromSlice(s[i+1:]) {
 				mute(user)
 				ret += user.Names[0] + " "
 			}
+			return ret
 		case "shutdown":
+			if !authorized {
+				return "Sorry, I won't take that command from you."
+			}
 			shutdown()
 		default:
 
 		}
 	}
-	return ret
+	return "Sorry, what was that?"
 }
 
 func getPersonFromAlias(alias string) (person, error) {
@@ -107,8 +125,8 @@ func getPersonFromAlias(alias string) (person, error) {
 
 func getPeopleFromSlice(s []string) []person {
 	ret := []person{}
-	if isValueInList("and", s) != -1 {
-		andindex := isValueInList("and", s)
+	if indexOf("and", s) != -1 {
+		andindex := indexOf("and", s)
 		for _, alias := range append(s[:andindex+1], s[andindex+1]) {
 			nperson, err := getPersonFromAlias(alias)
 			if err == nil {
@@ -159,10 +177,14 @@ func saveData(path string) {
 
 //Utility functions
 
-func isValueInList(value string, list []string) int {
-	for i, v := range list {
-		if v == value {
-			return i
+func indexOf(value interface{}, list interface{}) int {
+	switch list.(type) {
+	case []string:
+		list := []string(list.([]string))
+		for i, v := range list {
+			if v == value {
+				return i
+			}
 		}
 	}
 	return -1
