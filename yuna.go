@@ -27,12 +27,13 @@ type data struct {
 }
 
 var rundata data
-var client discordgo.Session
+var client *discordgo.Session
 
 func main() {
 	rundata = getData("./data.json")
 
-	client, err := discordgo.New("Bot " + rundata.APIToken)
+	var err error
+	client, err = discordgo.New("Bot " + rundata.APIToken)
 	checkErr(err)
 
 	//register listeners here
@@ -97,8 +98,10 @@ func interpret(command string, authorized bool) string {
 			ret := "Alright, I've muted: "
 			for _, user := range getPeopleFromSlice(s[i+1:]) {
 				fmt.Println(client)
-				_, err := client.GuildMember(rundata.GuildID, user.DiscordID)
+				mem, err := client.GuildMember(rundata.GuildID, user.DiscordID)
 				checkErr(err)
+				mute(mem)
+				ret += user.Names[0]
 			}
 			return ret
 		case "shutdown":
@@ -152,7 +155,7 @@ func mute(user *discordgo.Member) error {
 func shutdown() { //Shutdown the discord connection and save data
 	client.Close()
 	saveData("./data.json")
-
+	os.Exit(0)
 }
 
 //Functions to load and save data
