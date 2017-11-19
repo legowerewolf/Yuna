@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"reflect"
 	"strings"
 	"syscall"
 
@@ -21,8 +22,7 @@ type person struct {
 
 type data struct {
 	APIToken string   `json:"apitoken"`
-	GuildID  string   `json:"guildID"`
-	RoleID   string   `json:"roleID"`
+	RoleName string   `json:"roleName"`
 	People   []person `json:"people"`
 }
 
@@ -39,15 +39,13 @@ func main() {
 	//register listeners here
 	client.AddHandler(messageCreate)
 
-	client.Open()
-	defer shutdown()
+	client.Open()    //The client is connecting.
+	defer shutdown() //In the event that something happens, shut down cleanly.
 
 	fmt.Println("Yuna is now online.  Press CTRL-C to shut down.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
-
-	shutdown()
 }
 
 func sanitize(s string) []string {
@@ -68,23 +66,25 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	mem, err := s.GuildMember(rundata.GuildID, m.Author.ID)
+	chn, err := s.Channel(m.ChannelID)
 	checkErr(err)
 
-	authorized := false
-	if indexOf(rundata.RoleID, mem.Roles) != -1 {
-		authorized = true
-	}
+	guild, err := s.Guild(chn.GuildID)
+	checkErr(err)
 
-	if indexOf("yuna", sanitize(strings.ToLower(m.Content))) != -1 {
-		_, err := s.ChannelMessageSend(m.ChannelID, interpret(m.Content, authorized))
+	mem, err := s.GuildMember(guild.ID, m.Author.ID)
+	checkErr(err)
+	mem.GuildID = guild.ID
+
+	if indexOf("yuna", sanitize(strings.ToLower(m.Content))) != -1 || indexOf(client.State.User, m.Mentions) != -1 {
+		_, err := s.ChannelMessageSend(m.ChannelID, interpret(m.Content, mem))
 		checkErr(err)
-
 	}
 }
 
-func interpret(command string, authorized bool) string {
+func interpret(command string, mem *discordgo.Member) string {
 	s := sanitize(command)
+	authorized := checkAuthorized(mem)
 	for i, word := range s {
 		word = strings.ToLower(word)
 		switch word {
@@ -97,8 +97,7 @@ func interpret(command string, authorized bool) string {
 			}
 			ret := "Alright, I've muted: "
 			for _, user := range getPeopleFromSlice(s[i+1:]) {
-				fmt.Println(client)
-				mem, err := client.GuildMember(rundata.GuildID, user.DiscordID)
+				mem, err := client.GuildMember(mem.GuildID, user.DiscordID)
 				checkErr(err)
 				mute(mem)
 				ret += user.Names[0]
@@ -191,12 +190,45 @@ func indexOf(value interface{}, list interface{}) int {
 				return i
 			}
 		}
+	case []*discordgo.User:
+		list := []*discordgo.User(list.([]*discordgo.User))
+		value2 := value.(*discordgo.User)
+		for i, v := range list {
+			if value2.ID == v.ID {
+				return i
+			}
+		}
+	default:
+		fmt.Print(value)
+		fmt.Println(reflect.TypeOf(value))
+		fmt.Print(list)
+		fmt.Println(reflect.TypeOf(list))
 	}
 	return -1
 }
 
 func checkErr(err error) {
 	if err != nil {
-		log.Fatal("ERROR:", err)
+		log.Fatal("ERROR: ", err)
 	}
+}
+
+func checkAuthorized(mem *discordgo.Member) bool {
+	guild, err := client.Guild(mem.GuildID)
+	checkErr(err)
+	authrole := ""
+	for _, role := range guild.Roles {
+		if role.Name == rundata.RoleName {
+			authrole = role.ID
+			break
+		}
+	}
+	authorized := false
+	for _, r := range mem.Roles {
+		if r == authrole {
+			authorized = true
+			break
+		}
+	}
+	return authorized
 }
