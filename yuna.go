@@ -48,16 +48,6 @@ func main() {
 	<-sc
 }
 
-func sanitize(s string) []string {
-	punct := []string{",", "."}
-	for _, p := range punct {
-		s = strings.Replace(s, p, "", -1)
-	}
-
-	words := strings.Split(s, " ")
-	return words
-}
-
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// Ignore all messages created by the bot itself
@@ -113,48 +103,6 @@ func interpret(command string, mem *discordgo.Member) string {
 		}
 	}
 	return "Sorry, what was that?"
-}
-
-func getPersonFromAlias(alias string) (person, error) {
-	for _, person := range rundata.People {
-		for _, name := range person.Names {
-			if strings.ToLower(name) == strings.ToLower(alias) {
-				return person, nil
-			}
-		}
-	}
-	return person{}, errors.New("Could not find person with alias: " + alias)
-}
-
-func getPeopleFromSlice(s []string) []person {
-	ret := []person{}
-	if indexOf("and", s) != -1 {
-		andindex := indexOf("and", s)
-		for _, alias := range append(s[:andindex+1], s[andindex+1]) {
-			nperson, err := getPersonFromAlias(alias)
-			if err == nil {
-				ret = append(ret, nperson)
-			}
-		}
-	} else {
-		nperson, err := getPersonFromAlias(s[0])
-		if err == nil {
-			ret = append(ret, nperson)
-		}
-	}
-	return ret
-}
-
-func mute(user *discordgo.Member) error {
-	fmt.Println("Muting ID " + user.User.ID)
-	user.Mute = true
-	return nil
-}
-
-func shutdown() { //Shutdown the discord connection and save data
-	client.Close()
-	saveData("./data.json")
-	os.Exit(0)
 }
 
 //Functions to load and save data
@@ -231,4 +179,55 @@ func checkAuthorized(mem *discordgo.Member) bool {
 		}
 	}
 	return authorized
+}
+
+func sanitize(s string) []string {
+	punct := []string{",", "."}
+	for _, p := range punct {
+		s = strings.Replace(s, p, "", -1)
+	}
+	words := strings.Split(s, " ")
+	return words
+}
+
+func getPersonFromAlias(alias string) (person, error) {
+	for _, person := range rundata.People {
+		for _, name := range person.Names {
+			if strings.ToLower(name) == strings.ToLower(alias) {
+				return person, nil
+			}
+		}
+	}
+	return person{}, errors.New("Could not find person with alias: " + alias)
+}
+
+func getPeopleFromSlice(s []string) []person {
+	ret := []person{}
+	if indexOf("and", s) != -1 {
+		andindex := indexOf("and", s)
+		for _, alias := range append(s[:andindex+1], s[andindex+1]) {
+			nperson, err := getPersonFromAlias(alias)
+			if err == nil {
+				ret = append(ret, nperson)
+			}
+		}
+	} else {
+		nperson, err := getPersonFromAlias(s[0])
+		if err == nil {
+			ret = append(ret, nperson)
+		}
+	}
+	return ret
+}
+
+func mute(user *discordgo.Member) error {
+	fmt.Println("Muting ID " + user.User.ID)
+	user.Mute = true
+	return nil
+}
+
+func shutdown() { //Shutdown the discord connection and save data
+	client.Close()
+	saveData("./data.json")
+	os.Exit(0)
 }
