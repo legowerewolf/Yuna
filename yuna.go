@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"reflect"
+	"regexp"
 	"strings"
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/m90/go-chatbase"
 )
 
 type person struct {
@@ -20,28 +23,37 @@ type person struct {
 	Names     []string `json:"names"`
 }
 
-type data struct {
-	APIToken string   `json:"apitoken"`
-	RoleName string   `json:"roleName"`
-	People   []person `json:"people"`
+type database struct {
+	APITokens map[string]string `json:"apitokens"`
+	RoleName  string            `json:"roleName"`
+	People    []person          `json:"people"`
+	Models    map[string]string `json:"models"`
 }
 
-var rundata data
-var client *discordgo.Session
+var rundata database
+var dclient *discordgo.Session
+var cclient *chatbase.Client
 
 func main() {
+	//Load database
 	rundata = getData("./data.json")
 
+	//Build the Chatbase client
+	cclient = chatbase.New(rundata.APITokens["chatbase"])
+
+	//Build the Discord client
 	var err error
-	client, err = discordgo.New("Bot " + rundata.APIToken)
+	dclient, err = discordgo.New("Bot " + rundata.APITokens["discord"])
 	checkErr(err)
 
-	//register listeners here
-	client.AddHandler(messageCreate)
+	//register discord listeners here
+	dclient.AddHandler(messageCreate)
 
-	client.Open()    //The client is connecting.
-	defer shutdown() //In the event that something happens, shut down cleanly.
+	//connect to Discord servers
+	checkErr(dclient.Open())
 
+	//Wait for a manual shutdown
+	defer shutdown()
 	fmt.Println("Yuna is now online.  Press CTRL-C to shut down.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
@@ -49,9 +61,6 @@ func main() {
 }
 
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-
-	// Ignore all messages created by the bot itself
-	// This isn't required in this specific example but it's a good practice.
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
@@ -66,55 +75,100 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	checkErr(err)
 	mem.GuildID = guild.ID
 
-	if indexOf("yuna", sanitize(strings.ToLower(m.Content))) != -1 || indexOf(client.State.User, m.Mentions) != -1 {
+	if indexOf(s.State.User, m.Mentions) != -1 {
 		_, err := s.ChannelMessageSend(m.ChannelID, interpret(m.Content, mem))
 		checkErr(err)
+		fmt.Println(intentOf(m.Content))
 	}
+}
+
+func intentOf(command string) string {
+	intent := ""
+	maxScore := 0.0
+	for i, m := range rundata.Models {
+		r := regexp.MustCompile(m)
+		r.Longest()
+		if float64(len(r.FindString(command)))/float64(len(command)) > maxScore {
+			intent = i
+		}
+
+	}
+	return intent
 }
 
 func interpret(command string, mem *discordgo.Member) string {
 	s := sanitize(command)
 	authorized := checkAuthorized(mem)
-	for i, word := range s {
-		word = strings.ToLower(word)
-		switch word {
-		case "mute":
-			if !authorized {
-				return "Sorry, I won't take that command from you."
-			}
-			if len(getPeopleFromSlice(s[i+1:])) == 0 {
-				return "Sorry, but I couldn't find anybody by that name. Try again?"
-			}
-			ret := "Alright, I've muted: "
-			for _, user := range getPeopleFromSlice(s[i+1:]) {
-				mem, err := client.GuildMember(mem.GuildID, user.DiscordID)
-				checkErr(err)
-				mute(mem)
-				ret += user.Names[0]
-			}
-			return ret
-		case "shutdown":
-			if !authorized {
-				return "Sorry, I won't take that command from you."
-			}
-			shutdown()
-		default:
+	returnValue := ""
 
+	messageReport := cclient.UserMessage(mem.User.ID, "Discord")
+	messageReport.SetMessage(command)
+	messageReport.SetIntent(intentOf(command))
+
+	switch intentOf(command) {
+	case "mute":
+		if !authorized {
+			returnValue = "Sorry, I won't take that command from you."
+			break
 		}
+		if len(getPeopleFromSlice(s)) == 0 {
+			returnValue = "Sorry, but I couldn't find anybody by that name. Try again?"
+			break
+		}
+		returnValue = "Alright, I've muted "
+		for i, user := range getPeopleFromSlice(s) {
+			mem, err := dclient.GuildMember(mem.GuildID, user.DiscordID)
+			checkErr(err)
+			mute(mem)
+
+			if len(getPeopleFromSlice(s[i+1:]))-i >= 3 {
+				returnValue += user.Names[0] + ", "
+			} else if len(getPeopleFromSlice(s[i+1:]))-i == 2 {
+				returnValue += user.Names[0]
+				if len(getPeopleFromSlice(s[i+1:])) > 2 {
+					returnValue += ", "
+				} else {
+					returnValue += " "
+				}
+			} else {
+				if len(getPeopleFromSlice(s[i+1:])) > 1 {
+					returnValue += "and "
+				}
+				returnValue += user.Names[0] + "."
+			}
+		}
+		break
+	case "shutdown":
+		if !authorized {
+			returnValue = "Sorry, I won't take that command from you."
+			break
+		}
+		returnValue = "Alright. Goodbye!"
+		defer shutdown()
+	case "nrgreeting":
+		responses := []string{"Hello!", "Hi!", "Greetings."}
+		returnValue = responses[rand.Intn(len(responses))]
+	case "reload_data":
+		rundata = getData("./data.json")
+		returnValue = "Alright, I've reloaded my database from disk."
+	default:
+		messageReport.SetNotHandled(true)
+		returnValue = "Sorry, what was that?"
 	}
-	return "Sorry, what was that?"
+	messageReport.Submit()
+	return returnValue
 }
 
 //Functions to load and save data
 
-func getData(path string) data {
+func getData(path string) database {
 	raw, err := ioutil.ReadFile(path)
 	if err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)
 	}
 
-	var c data
+	var c database
 	json.Unmarshal(raw, &c)
 	return c
 }
@@ -162,7 +216,7 @@ func checkErr(err error) {
 }
 
 func checkAuthorized(mem *discordgo.Member) bool {
-	guild, err := client.Guild(mem.GuildID)
+	guild, err := dclient.Guild(mem.GuildID)
 	checkErr(err)
 	authrole := ""
 	for _, role := range guild.Roles {
@@ -227,7 +281,7 @@ func mute(user *discordgo.Member) error {
 }
 
 func shutdown() { //Shutdown the discord connection and save data
-	client.Close()
+	dclient.Close()
 	saveData("./data.json")
 	os.Exit(0)
 }
