@@ -24,15 +24,20 @@ type person struct {
 }
 
 type database struct {
-	APITokens map[string]string `json:"apitokens"`
-	RoleName  string            `json:"roleName"`
-	People    []person          `json:"people"`
-	Models    map[string]string `json:"models"`
+	Guild        string            `json:"guild"`
+	VoiceChannel string            `json:"voiceChannel"`
+	RoleName     string            `json:"roleName"`
+	APITokens    map[string]string `json:"apitokens"`
+	People       []person          `json:"people"`
+	Models       map[string]string `json:"models"`
 }
 
-var rundata database
-var dclient *discordgo.Session
-var cclient *chatbase.Client
+var (
+	rundata  database
+	dclient  *discordgo.Session
+	dvclient *discordgo.VoiceConnection
+	cclient  *chatbase.Client
+)
 
 func main() {
 	//Load database
@@ -51,6 +56,8 @@ func main() {
 
 	//connect to Discord servers
 	checkErr(dclient.Open())
+	dvclient, err = dclient.ChannelVoiceJoin(rundata.Guild, rundata.VoiceChannel, true, false)
+	checkErr(err)
 
 	//Wait for a manual shutdown
 	defer shutdown()
@@ -80,20 +87,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		checkErr(err)
 		fmt.Println(intentOf(m.Content))
 	}
-}
-
-func intentOf(command string) string {
-	intent := ""
-	maxScore := 0.0
-	for i, m := range rundata.Models {
-		r := regexp.MustCompile(m)
-		r.Longest()
-		if float64(len(r.FindString(command)))/float64(len(command)) > maxScore {
-			intent = i
-		}
-
-	}
-	return intent
 }
 
 func interpret(command string, mem *discordgo.Member) string {
@@ -209,6 +202,28 @@ func indexOf(value interface{}, list interface{}) int {
 	return -1
 }
 
+func toEnglishList(elements []string) string {
+	ret := ""
+	for i, str := range elements {
+		if len(elements)-i >= 3 {
+			ret += str + ", "
+		} else if len(elements)-i == 2 {
+			ret += str
+			if len(elements) > 2 {
+				ret += ", "
+			} else {
+				ret += " "
+			}
+		} else {
+			if len(elements) > 1 {
+				ret += "and "
+			}
+			ret += str
+		}
+	}
+	return ret
+}
+
 func checkErr(err error) {
 	if err != nil {
 		log.Fatal("ERROR: ", err)
@@ -280,8 +295,26 @@ func mute(user *discordgo.Member) error {
 	return nil
 }
 
+func intentOf(command string) string {
+	intent := ""
+	maxScore := 0.0
+	for i, m := range rundata.Models {
+		r := regexp.MustCompile(m)
+		r.Longest()
+		if float64(len(r.FindString(command)))/float64(len(command)) > maxScore {
+			intent = i
+		}
+
+	}
+	return intent
+}
+
 func shutdown() { //Shutdown the discord connection and save data
+	dvclient.Disconnect()
+	dvclient.Close()
 	dclient.Close()
-	saveData("./data.json")
+	if !reflect.DeepEqual(rundata, getData("./data.json")) {
+		saveData("./data.json")
+	}
 	os.Exit(0)
 }
