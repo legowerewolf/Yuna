@@ -1,19 +1,12 @@
 package main
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"net/url"
-	"os/exec"
 	"regexp"
-	"strconv"
 	"strings"
-
-	"github.com/bwmarrin/dgvoice"
 
 	"github.com/Jeffail/gabs"
 	"github.com/parnurzeal/gorequest"
