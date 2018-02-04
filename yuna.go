@@ -18,11 +18,13 @@ import (
 	"github.com/m90/go-chatbase"
 )
 
+//All fields are exported because of the JSON package
 type person struct {
 	DiscordID string   `json:"discordID"`
 	Names     []string `json:"names"`
 }
 
+//All fields are exported because of the JSON package
 type database struct {
 	Guild        string            `json:"guild"`
 	VoiceChannel string            `json:"voiceChannel"`
@@ -68,29 +70,30 @@ func main() {
 }
 
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+	//Check and see if the person who sent the message is the bot itself - if so, don't respond.
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
 
-	chn, err := s.Channel(m.ChannelID)
-	checkErr(err)
+	if indexOf(s.State.User, m.Mentions) != -1 { //Check and see if the bot is @mentioned
 
-	guild, err := s.Guild(chn.GuildID)
-	checkErr(err)
+		//Get the guildmember who sent the message
+		chn, err := s.Channel(m.ChannelID)
+		checkErr(err)
+		guild, err := s.Guild(chn.GuildID)
+		checkErr(err)
+		mem, err := s.GuildMember(guild.ID, m.Author.ID)
+		checkErr(err)
+		mem.GuildID = guild.ID
 
-	mem, err := s.GuildMember(guild.ID, m.Author.ID)
-	checkErr(err)
-	mem.GuildID = guild.ID
-
-	if indexOf(s.State.User, m.Mentions) != -1 {
-		_, err := s.ChannelMessageSend(m.ChannelID, interpret(m.Content, mem))
+		//Send a message back on the same channel with the feedback returned by interpret()
+		_, err = s.ChannelMessageSend(m.ChannelID, interpret(m.Content, mem))
 		checkErr(err)
 		fmt.Println(intentOf(m.Content) + " " + m.Content)
 	}
 }
 
 func interpret(command string, mem *discordgo.Member) string {
-	s := sanitize(command)
 	authorized := checkAuthorized(mem)
 	returnValue := ""
 
@@ -104,33 +107,21 @@ func interpret(command string, mem *discordgo.Member) string {
 			returnValue = "Sorry, I won't take that command from you."
 			break
 		}
+		s := sanitize(command)
 		if len(getPeopleFromSlice(s)) == 0 {
 			returnValue = "Sorry, but I couldn't find anybody by that name. Try again?"
 			break
 		}
 		returnValue = "Alright, I've muted "
-		for i, user := range getPeopleFromSlice(s) {
+		users := []string{}
+		for _, user := range getPeopleFromSlice(s) {
 			mem, err := dclient.GuildMember(mem.GuildID, user.DiscordID)
 			checkErr(err)
 			mute(mem)
 
-			if len(getPeopleFromSlice(s[i+1:]))-i >= 3 {
-				returnValue += user.Names[0] + ", "
-			} else if len(getPeopleFromSlice(s[i+1:]))-i == 2 {
-				returnValue += user.Names[0]
-				if len(getPeopleFromSlice(s[i+1:])) > 2 {
-					returnValue += ", "
-				} else {
-					returnValue += " "
-				}
-			} else {
-				if len(getPeopleFromSlice(s[i+1:])) > 1 {
-					returnValue += "and "
-				}
-				returnValue += user.Names[0] + "."
-			}
+			users = append(users, user.Names[0])
 		}
-		break
+		returnValue += toEnglishList(users)
 	case "shutdown":
 		if !authorized {
 			returnValue = "Sorry, I won't take that command from you."
@@ -148,7 +139,9 @@ func interpret(command string, mem *discordgo.Member) string {
 		person, _ := getPersonFromAlias(sanitize(command)[indexOf("for", sanitize(command))+1])
 		returnValue = "That user is known as " + toEnglishList(person.Names)
 	case "play_music":
-		returnValue = "I understand you want me to play music. Unfortunately, I don't know how to do that yet."
+		returnValue = "I understand you want me to play music. I don't quite know how to do that yet."
+	case "create_voice_channel":
+
 	default:
 		messageReport.SetNotHandled(true)
 		returnValue = "Sorry, what was that?"
@@ -184,7 +177,7 @@ func saveData(path string) {
 
 //Utility functions
 
-func indexOf(value interface{}, list interface{}) int {
+func indexOf(value interface{}, list interface{}) int { //get the index of any value of any type in any list - to be added to as necessary
 	switch list.(type) {
 	case []string:
 		list := []string(list.([]string))
@@ -210,7 +203,7 @@ func indexOf(value interface{}, list interface{}) int {
 	return -1
 }
 
-func toEnglishList(elements []string) string {
+func toEnglishList(elements []string) string { //Turns a computer-format list of strings into a regular english list of things (with oxford comma!)
 	ret := ""
 	for i, str := range elements {
 		if len(elements)-i >= 3 {
@@ -238,7 +231,7 @@ func checkErr(err error) {
 	}
 }
 
-func checkAuthorized(mem *discordgo.Member) bool {
+func checkAuthorized(mem *discordgo.Member) bool { //Check and see if the member has advanced permissions based on what roles they have.
 	guild, err := dclient.Guild(mem.GuildID)
 	checkErr(err)
 	authrole := ""
@@ -258,8 +251,8 @@ func checkAuthorized(mem *discordgo.Member) bool {
 	return authorized
 }
 
-func sanitize(s string) []string {
-	punct := []string{",", "."}
+func sanitize(s string) []string { //Take a string, remove the punctuation, and return it as a []string.
+	punct := []string{",", ".", "!"}
 	for _, p := range punct {
 		s = strings.Replace(s, p, "", -1)
 	}
@@ -268,27 +261,23 @@ func sanitize(s string) []string {
 }
 
 func getPersonFromAlias(alias string) (person, error) {
-	for _, person := range rundata.People {
-		for _, name := range person.Names {
+	for _, person := range rundata.People { //Scan through people the bot is aware of
+		if alias[2:len(alias)-1] == person.DiscordID { //See if this is a mention (<@ ... >) of the person
+			return person, nil
+		}
+		for _, name := range person.Names { //Scan through names the bot knows for this person, ignoring case
 			if strings.ToLower(name) == strings.ToLower(alias) {
 				return person, nil
 			}
 		}
-		if alias[2:len(alias)-1] == person.DiscordID {
-			return person, nil
-		}
+
 	}
 
-	fmt.Println(alias[2 : len(alias)-1])
+	//The bot doesn't know this person. Add it to the registry and return the new person.
 	matched, _ := regexp.MatchString("(:?)([0-9])+", alias[2:len(alias)-1])
-	fmt.Println(matched)
 	if len(alias[2:len(alias)-1]) == 18 && matched {
 		rundata.People = append(rundata.People, person{DiscordID: alias[2 : len(alias)-1]})
-		fmt.Println(rundata.People)
 	}
-
-	fmt.Println(rundata.People)
-
 	return person{}, errors.New("Could not find person with alias: " + alias)
 }
 
