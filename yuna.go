@@ -85,7 +85,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if indexOf(s.State.User, m.Mentions) != -1 {
 		_, err := s.ChannelMessageSend(m.ChannelID, interpret(m.Content, mem))
 		checkErr(err)
-		fmt.Println(intentOf(m.Content))
+		fmt.Println(intentOf(m.Content) + " " + m.Content)
 	}
 }
 
@@ -144,6 +144,11 @@ func interpret(command string, mem *discordgo.Member) string {
 	case "reload_data":
 		rundata = getData("./data.json")
 		returnValue = "Alright, I've reloaded my database from disk."
+	case "list_names":
+		person, _ := getPersonFromAlias(sanitize(command)[indexOf("for", sanitize(command))+1])
+		returnValue = "That user is known as " + toEnglishList(person.Names)
+	case "play_music":
+		returnValue = "I understand you want me to play music. Unfortunately, I don't know how to do that yet."
 	default:
 		messageReport.SetNotHandled(true)
 		returnValue = "Sorry, what was that?"
@@ -167,6 +172,9 @@ func getData(path string) database {
 }
 
 func saveData(path string) {
+	if reflect.DeepEqual(rundata, getData(path)) {
+		return
+	}
 	dat, err := json.Marshal(rundata)
 	if err != nil {
 		fmt.Println(err.Error())
@@ -266,7 +274,21 @@ func getPersonFromAlias(alias string) (person, error) {
 				return person, nil
 			}
 		}
+		if alias[2:len(alias)-1] == person.DiscordID {
+			return person, nil
+		}
 	}
+
+	fmt.Println(alias[2 : len(alias)-1])
+	matched, _ := regexp.MatchString("(:?)([0-9])+", alias[2:len(alias)-1])
+	fmt.Println(matched)
+	if len(alias[2:len(alias)-1]) == 18 && matched {
+		rundata.People = append(rundata.People, person{DiscordID: alias[2 : len(alias)-1]})
+		fmt.Println(rundata.People)
+	}
+
+	fmt.Println(rundata.People)
+
 	return person{}, errors.New("Could not find person with alias: " + alias)
 }
 
@@ -313,8 +335,6 @@ func shutdown() { //Shutdown the discord connection and save data
 	dvclient.Disconnect()
 	dvclient.Close()
 	dclient.Close()
-	if !reflect.DeepEqual(rundata, getData("./data.json")) {
-		saveData("./data.json")
-	}
+	saveData("./data.json")
 	os.Exit(0)
 }
