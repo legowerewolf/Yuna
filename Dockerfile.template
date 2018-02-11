@@ -1,4 +1,4 @@
-FROM resin/%%RESIN_MACHINE_NAME%%-golang:1.8
+FROM resin/%%RESIN_MACHINE_NAME%%-golang:1.8 as builder
 WORKDIR /go/src/yuna
 COPY *.go ./
 RUN go get ./...
