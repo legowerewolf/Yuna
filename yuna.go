@@ -4,12 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
 	"os/signal"
-	"reflect"
 	"regexp"
 	"strings"
 	"syscall"
@@ -24,16 +22,6 @@ type person struct {
 	Names     []string `json:"names"`
 }
 
-//All fields are exported because of the JSON package
-type database struct {
-	Guild        string            `json:"guild"`
-	VoiceChannel string            `json:"voiceChannel"`
-	RoleName     string            `json:"roleName"`
-	APITokens    map[string]string `json:"apitokens"`
-	People       []person          `json:"people"`
-	Models       map[string]string `json:"models"`
-}
-
 var (
 	rundata  database
 	dclient  *discordgo.Session
@@ -43,7 +31,7 @@ var (
 
 func main() {
 	//Load database
-	rundata = getData("./data.json")
+	rundata = getData()
 
 	//Build the Chatbase client
 	cclient = chatbase.New(rundata.APITokens["chatbase"])
@@ -89,7 +77,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		//Send a message back on the same channel with the feedback returned by interpret()
 		_, err = s.ChannelMessageSend(m.ChannelID, interpret(m.Content, mem))
 		checkErr(err)
-		fmt.Println(intentOf(m.Content) + " " + m.Content)
+		fmt.Println(intentOf(m.Content, rundata.Models) + " " + m.Content)
 	}
 }
 
@@ -99,9 +87,9 @@ func interpret(command string, mem *discordgo.Member) string {
 
 	messageReport := cclient.UserMessage(mem.User.ID, "Discord")
 	messageReport.SetMessage(command)
-	messageReport.SetIntent(intentOf(command))
+	messageReport.SetIntent(intentOf(command, rundata.Models))
 
-	switch intentOf(command) {
+	switch intentOf(command, rundata.Models) {
 	case "mute":
 		if !authorized {
 			returnValue = "Sorry, I won't take that command from you."
@@ -133,7 +121,7 @@ func interpret(command string, mem *discordgo.Member) string {
 		responses := []string{"Hello!", "Hi!", "Greetings."}
 		returnValue = responses[rand.Intn(len(responses))]
 	case "reload_data":
-		rundata = getData("./data.json")
+		rundata = getData()
 		returnValue = "Alright, I've reloaded my database from disk."
 	case "list_names":
 		person, _ := getPersonFromAlias(sanitize(command)[indexOf("for", sanitize(command))+1])
@@ -141,7 +129,14 @@ func interpret(command string, mem *discordgo.Member) string {
 	case "play_music":
 		returnValue = "I understand you want me to play music. I don't quite know how to do that yet."
 	case "create_voice_channel":
-
+	case "export":
+		if !authorized {
+			returnValue = "I'm not telling you that."
+			break
+		}
+		dat, err := json.Marshal(rundata)
+		checkErr(err)
+		returnValue = symmetricEncrypt(string(dat), sanitize(command)[len(sanitize(command))-1])
 	default:
 		messageReport.SetNotHandled(true)
 		returnValue = "Sorry, what was that?"
@@ -150,80 +145,7 @@ func interpret(command string, mem *discordgo.Member) string {
 	return returnValue
 }
 
-//Functions to load and save data
-
-func getData(path string) database {
-	raw, err := ioutil.ReadFile(path)
-	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
-
-	var c database
-	json.Unmarshal(raw, &c)
-	return c
-}
-
-func saveData(path string) {
-	if reflect.DeepEqual(rundata, getData(path)) {
-		return
-	}
-	dat, err := json.Marshal(rundata)
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-	ioutil.WriteFile(path, dat, 0644)
-}
-
 //Utility functions
-
-func indexOf(value interface{}, list interface{}) int { //get the index of any value of any type in any list - to be added to as necessary
-	switch list.(type) {
-	case []string:
-		list := []string(list.([]string))
-		for i, v := range list {
-			if v == value {
-				return i
-			}
-		}
-	case []*discordgo.User:
-		list := []*discordgo.User(list.([]*discordgo.User))
-		value2 := value.(*discordgo.User)
-		for i, v := range list {
-			if value2.ID == v.ID {
-				return i
-			}
-		}
-	default:
-		fmt.Print(value)
-		fmt.Println(reflect.TypeOf(value))
-		fmt.Print(list)
-		fmt.Println(reflect.TypeOf(list))
-	}
-	return -1
-}
-
-func toEnglishList(elements []string) string { //Turns a computer-format list of strings into a regular english list of things (with oxford comma!)
-	ret := ""
-	for i, str := range elements {
-		if len(elements)-i >= 3 {
-			ret += str + ", "
-		} else if len(elements)-i == 2 {
-			ret += str
-			if len(elements) > 2 {
-				ret += ", "
-			} else {
-				ret += " "
-			}
-		} else {
-			if len(elements) > 1 {
-				ret += "and "
-			}
-			ret += str
-		}
-	}
-	return ret
-}
 
 func checkErr(err error) {
 	if err != nil {
@@ -306,24 +228,10 @@ func mute(user *discordgo.Member) error {
 	return nil
 }
 
-func intentOf(command string) string {
-	intent := ""
-	maxScore := 0.0
-	for i, m := range rundata.Models {
-		r := regexp.MustCompile(m)
-		r.Longest()
-		if float64(len(r.FindString(command)))/float64(len(command)) > maxScore {
-			intent = i
-		}
-
-	}
-	return intent
-}
-
 func shutdown() { //Shutdown the discord connection and save data
 	dvclient.Disconnect()
 	dvclient.Close()
 	dclient.Close()
-	saveData("./data.json")
+	saveData()
 	os.Exit(0)
 }
