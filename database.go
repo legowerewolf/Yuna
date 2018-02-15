@@ -40,6 +40,9 @@ func getData() database {
 				checkErr(err)
 
 				raw, err = symmetricDecrypt(string(contents), os.Getenv("CONFIG_KEY"))
+			} else {
+				fmt.Println("Last-ditch database load effort failed. Unable to start.")
+				os.Exit(1)
 			}
 		}
 	}
