@@ -4,6 +4,6 @@ COPY *.go ./
 RUN go get ./...
 RUN CGO_ENABLED=0 GOOS=linux go install -a
 
-FROM resin/%%RESIN_MACHINE_NAME%%
+FROM resin/%%RESIN_MACHINE_NAME%%-alpine:latest
 COPY --from=builder /go/bin/yuna /yuna
 CMD ["yuna"]
