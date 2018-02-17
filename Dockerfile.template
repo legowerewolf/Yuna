@@ -4,6 +4,6 @@ COPY *.go ./
 RUN go get ./...
 RUN CGO_ENABLED=0 GOOS=linux go install -a
 
-FROM scratch
+FROM resin/%%RESIN_MACHINE_NAME%%
 COPY --from=builder /go/bin/yuna /yuna
 CMD ["yuna"]
