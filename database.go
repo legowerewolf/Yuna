@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"os"
 	"reflect"
@@ -11,12 +12,13 @@ import (
 
 //All fields are exported because of the JSON package
 type database struct {
-	Guild        string            `json:"guild"`
-	VoiceChannel string            `json:"voiceChannel"`
-	RoleName     string            `json:"roleName"`
-	APITokens    map[string]string `json:"apitokens"`
-	People       []person          `json:"people"`
-	Models       map[string]string `json:"models"`
+	Guild        string
+	VoiceChannel string
+	RoleName     string
+	APITokens    map[string]string
+	People       []person
+	Models       map[string]string
+	Responses    map[string][]string
 	local        bool
 }
 
@@ -62,4 +64,9 @@ func saveData() {
 		fmt.Println(err.Error())
 	}
 	ioutil.WriteFile("./data/config.json", dat, 0644)
+}
+
+func (db database) getRandomResponse(intent string) string {
+	responses := db.Responses[intent]
+	return responses[rand.Intn(len(responses))]
 }

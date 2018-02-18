@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
 	"os/signal"
 	"regexp"
@@ -92,7 +91,7 @@ func interpret(command string, mem *discordgo.Member) string {
 	switch intentOf(command, rundata.Models) {
 	case "mute":
 		if !authorized {
-			returnValue = "Sorry, I won't take that command from you."
+			returnValue = rundata.getRandomResponse("not_authorized")
 			break
 		}
 		s := sanitize(command)
@@ -112,14 +111,13 @@ func interpret(command string, mem *discordgo.Member) string {
 		returnValue += toEnglishList(users)
 	case "shutdown":
 		if !authorized {
-			returnValue = "Sorry, I won't take that command from you."
+			returnValue = rundata.getRandomResponse("not_authorized")
 			break
 		}
 		returnValue = "Alright. Goodbye!"
 		defer shutdown()
 	case "nrgreeting":
-		responses := []string{"Hello!", "Hi!", "Greetings."}
-		returnValue = responses[rand.Intn(len(responses))]
+		returnValue = rundata.getRandomResponse("greeting")
 	case "reload_data":
 		rundata = getData()
 		returnValue = "Alright, I've reloaded my database from disk."
@@ -131,7 +129,7 @@ func interpret(command string, mem *discordgo.Member) string {
 	case "create_voice_channel":
 	case "export":
 		if !authorized {
-			returnValue = "I'm not telling you that."
+			returnValue = rundata.getRandomResponse("not_authorized")
 			break
 		}
 		dat, err := json.Marshal(rundata)
@@ -139,7 +137,7 @@ func interpret(command string, mem *discordgo.Member) string {
 		returnValue = symmetricEncrypt(string(dat), sanitize(command)[len(sanitize(command))-1])
 	default:
 		messageReport.SetNotHandled(true)
-		returnValue = "Sorry, what was that?"
+		returnValue = rundata.getRandomResponse("unknown_intent")
 	}
 	messageReport.Submit()
 	return returnValue
