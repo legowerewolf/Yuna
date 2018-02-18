@@ -22,10 +22,10 @@ type person struct {
 }
 
 var (
-	rundata  database
-	dclient  *discordgo.Session
-	dvclient *discordgo.VoiceConnection
-	cclient  *chatbase.Client
+	rundata   database
+	dclient   *discordgo.Session
+	dvcontrol map[string]chan string
+	cclient   *chatbase.Client
 )
 
 func main() {
@@ -38,15 +38,14 @@ func main() {
 	//Build the Discord client
 	var err error
 	dclient, err = discordgo.New("Bot " + rundata.APITokens["discord"])
-	checkErr(err)
+	checkErr(err, "construct discord client")
 
 	//register discord listeners here
 	dclient.AddHandler(messageCreate)
 
+	dvcontrol = make(map[string]chan string)
 	//connect to Discord servers
-	checkErr(dclient.Open())
-	dvclient, err = dclient.ChannelVoiceJoin(rundata.Guild, rundata.VoiceChannel, true, false)
-	checkErr(err)
+	checkErr(dclient.Open(), "open discord connection")
 
 	//Wait for a manual shutdown
 	defer shutdown()
@@ -66,16 +65,16 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 		//Get the guildmember who sent the message
 		chn, err := s.Channel(m.ChannelID)
-		checkErr(err)
+		checkErr(err, "message recieved - get channel")
 		guild, err := s.Guild(chn.GuildID)
-		checkErr(err)
+		checkErr(err, "message recieved - get guild")
 		mem, err := s.GuildMember(guild.ID, m.Author.ID)
-		checkErr(err)
+		checkErr(err, "message recieved - get guildmember")
 		mem.GuildID = guild.ID
 
 		//Send a message back on the same channel with the feedback returned by interpret()
 		_, err = s.ChannelMessageSend(m.ChannelID, interpret(m.Content, mem))
-		checkErr(err)
+		checkErr(err, "message recieved - send response")
 		fmt.Println(intentOf(m.Content, rundata.Models) + " " + m.Content)
 	}
 }
@@ -103,7 +102,7 @@ func interpret(command string, mem *discordgo.Member) string {
 		users := []string{}
 		for _, user := range getPeopleFromSlice(s) {
 			mem, err := dclient.GuildMember(mem.GuildID, user.DiscordID)
-			checkErr(err)
+			checkErr(err, "interpret mute - get guildmember for alias")
 			mute(mem)
 
 			users = append(users, user.Names[0])
@@ -126,14 +125,27 @@ func interpret(command string, mem *discordgo.Member) string {
 		returnValue = "That user is known as " + toEnglishList(person.Names)
 	case "play_music":
 		returnValue = "I understand you want me to play music. I don't quite know how to do that yet."
-	case "create_voice_channel":
+	case "start_voice_connection":
+		//id := whatever voice channel the user is in
+		//id := strconv.Itoa(len(dvcontrol) + 1)
+		id := "0"
+		c := make(chan string)
+		dvcontrol[id] = c
+		go voiceService(dclient, rundata.Guild, rundata.VoiceChannel, c)
+		returnValue = rundata.getRandomResponse("start_voice_connection")
+	case "end_voice_connection":
+		//id := whatever voice channel the user is in
+		//id := strconv.Itoa(len(dvcontrol) + 1)
+		id := "0"
+		dvcontrol[id] <- "disconnect"
+		returnValue = rundata.getRandomResponse("end_voice_connection")
 	case "export":
 		if !authorized {
 			returnValue = rundata.getRandomResponse("not_authorized")
 			break
 		}
 		dat, err := json.Marshal(rundata)
-		checkErr(err)
+		checkErr(err, "export config")
 		returnValue = symmetricEncrypt(string(dat), sanitize(command)[len(sanitize(command))-1])
 	default:
 		messageReport.SetNotHandled(true)
@@ -145,15 +157,15 @@ func interpret(command string, mem *discordgo.Member) string {
 
 //Utility functions
 
-func checkErr(err error) {
+func checkErr(err error, key string) {
 	if err != nil {
-		log.Fatal("ERROR: ", err)
+		log.Fatal("ERROR at \""+key+"\": ", err)
 	}
 }
 
 func checkAuthorized(mem *discordgo.Member) bool { //Check and see if the member has advanced permissions based on what roles they have.
 	guild, err := dclient.Guild(mem.GuildID)
-	checkErr(err)
+	checkErr(err, "authorization check - get guild")
 	authrole := ""
 	for _, role := range guild.Roles {
 		if role.Name == rundata.RoleName {
@@ -227,8 +239,9 @@ func mute(user *discordgo.Member) error {
 }
 
 func shutdown() { //Shutdown the discord connection and save data
-	dvclient.Disconnect()
-	dvclient.Close()
+	for _, c := range dvcontrol {
+		c <- "disconnect"
+	}
 	dclient.Close()
 	saveData()
 	os.Exit(0)

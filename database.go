@@ -35,11 +35,11 @@ func getData() database {
 			//grab a version from the url contained in an enironment variable and decrypt with the key found in an enviroment variable
 			if os.Getenv("CONFIG_URL") != "" && os.Getenv("CONFIG_KEY") != "" {
 				resp, err := http.Get(os.Getenv("CONFIG_URL"))
-				checkErr(err)
+				checkErr(err, "get config from remote")
 
 				var contents []byte
 				contents, err = ioutil.ReadAll(resp.Body)
-				checkErr(err)
+				checkErr(err, "read remote config")
 
 				raw, err = symmetricDecrypt(string(contents), os.Getenv("CONFIG_KEY"))
 			} else {
