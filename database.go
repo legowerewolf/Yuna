@@ -27,34 +27,21 @@ type database struct {
 func getData() database {
 	var raw []byte
 	var err error
-	local := true
 
 	raw, err = ioutil.ReadFile("./data/config.json")
 	if err != nil { // If config file not found in proper location
-		local = false
 		raw, err = ioutil.ReadFile("./onboarding/config.json")
 		if err != nil { // If config file not found in onboarding location
 			//grab a version from the url contained in an enironment variable and decrypt with the key found in an enviroment variable
 			if os.Getenv("CONFIG_URL") != "" && os.Getenv("CONFIG_KEY") != "" {
-				resp, err := http.Get(os.Getenv("CONFIG_URL"))
-				checkErr(err, "get config from remote")
-
-				var contents []byte
-				contents, err = ioutil.ReadAll(resp.Body)
-				checkErr(err, "read remote config")
-
-				raw, err = cryptowrapper.SymmetricDecrypt(string(contents), os.Getenv("CONFIG_KEY"))
-			} else {
-				fmt.Println("Last-ditch database load effort failed. Unable to start.")
-				os.Exit(1)
+				return getDataFromRemote(os.Getenv("CONFIG_URL"), os.Getenv("CONFIG_KEY"))
 			}
+			fmt.Println("Last-ditch database load effort failed. Unable to start.")
+			os.Exit(1)
 		}
 	}
 
-	var c database
-	json.Unmarshal(raw, &c)
-	c.local = local
-	return c
+	return buildDatabaseFromRaw(raw, true)
 }
 
 func saveData() {
@@ -71,4 +58,26 @@ func saveData() {
 func (db database) getRandomResponse(intent string) string {
 	responses := db.Responses[intent]
 	return responses[rand.Intn(len(responses))]
+}
+
+func getDataFromRemote(configURL, key string) database {
+	resp, err := http.Get(os.Getenv(configURL))
+	checkErr(err, "get config from remote")
+
+	var contents []byte
+	contents, err = ioutil.ReadAll(resp.Body)
+	checkErr(err, "read remote config")
+
+	raw, err := cryptowrapper.SymmetricDecrypt(string(contents), os.Getenv("CONFIG_KEY"))
+	checkErr(err, "decrypt config")
+
+	return buildDatabaseFromRaw(raw, false)
+
+}
+
+func buildDatabaseFromRaw(raw []byte, local bool) database {
+	var c database
+	json.Unmarshal(raw, &c)
+	c.local = local
+	return c
 }
