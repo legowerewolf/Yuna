@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/legowerewolf/cryptowrapper"
 	"github.com/m90/go-chatbase"
 )
 
@@ -146,7 +147,7 @@ func interpret(command string, mem *discordgo.Member) string {
 		}
 		dat, err := json.Marshal(rundata)
 		checkErr(err, "export config")
-		returnValue = symmetricEncrypt(string(dat), sanitize(command)[len(sanitize(command))-1])
+		returnValue = cryptowrapper.SymmetricEncrypt(string(dat), sanitize(command)[len(sanitize(command))-1])
 	default:
 		messageReport.SetNotHandled(true)
 		returnValue = rundata.getRandomResponse("unknown_intent")

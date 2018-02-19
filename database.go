@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+
+	"github.com/legowerewolf/cryptowrapper"
 )
 
 //All fields are exported because of the JSON package
@@ -41,7 +43,7 @@ func getData() database {
 				contents, err = ioutil.ReadAll(resp.Body)
 				checkErr(err, "read remote config")
 
-				raw, err = symmetricDecrypt(string(contents), os.Getenv("CONFIG_KEY"))
+				raw, err = cryptowrapper.SymmetricDecrypt(string(contents), os.Getenv("CONFIG_KEY"))
 			} else {
 				fmt.Println("Last-ditch database load effort failed. Unable to start.")
 				os.Exit(1)
