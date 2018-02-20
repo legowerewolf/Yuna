@@ -132,7 +132,10 @@ func interpret(command string, mem *discordgo.Member) string {
 			dvcontrol[mem.GuildID] <- "disconnect"
 		}
 		id, err := getCurrentVoiceChannel(mem)
-		checkErr(err, "Join voice channel - person not in channel")
+		if err != nil && err.Error() == "person not in voice channel" {
+			returnValue = rundata.getRandomResponse("user_not_in_channel")
+			break
+		}
 		c := make(chan string)
 		dvcontrol[mem.GuildID] = c
 		go voiceService(dclient, mem.GuildID, id, c)
