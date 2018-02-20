@@ -14,14 +14,12 @@ import (
 
 //All fields are exported because of the JSON package
 type database struct {
-	Guild        string
-	VoiceChannel string
-	RoleName     string
-	APITokens    map[string]string
-	People       []person
-	Models       map[string]string
-	Responses    map[string][]string
-	local        bool
+	RoleName  string
+	APITokens map[string]string
+	People    []person
+	Models    map[string]string
+	Responses map[string][]string
+	local     bool
 }
 
 func getData() database {

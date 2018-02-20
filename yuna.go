@@ -127,18 +127,19 @@ func interpret(command string, mem *discordgo.Member) string {
 	case "play_music":
 		returnValue = "I understand you want me to play music. I don't quite know how to do that yet."
 	case "start_voice_connection":
-		//id := whatever voice channel the user is in
-		//id := strconv.Itoa(len(dvcontrol) + 1)
-		id := "0"
+		_, prs := dvcontrol[mem.GuildID]
+		if prs {
+			dvcontrol[mem.GuildID] <- "disconnect"
+		}
+		id, err := getCurrentVoiceChannel(mem)
+		checkErr(err, "Join voice channel - person not in channel")
 		c := make(chan string)
-		dvcontrol[id] = c
-		go voiceService(dclient, rundata.Guild, rundata.VoiceChannel, c)
+		dvcontrol[mem.GuildID] = c
+		go voiceService(dclient, mem.GuildID, id, c)
 		returnValue = rundata.getRandomResponse("start_voice_connection")
 	case "end_voice_connection":
-		//id := whatever voice channel the user is in
-		//id := strconv.Itoa(len(dvcontrol) + 1)
-		id := "0"
-		dvcontrol[id] <- "disconnect"
+		dvcontrol[mem.GuildID] <- "disconnect"
+		delete(dvcontrol, mem.GuildID)
 		returnValue = rundata.getRandomResponse("end_voice_connection")
 	case "export":
 		if !authorized {
@@ -157,6 +158,17 @@ func interpret(command string, mem *discordgo.Member) string {
 }
 
 //Utility functions
+
+func getCurrentVoiceChannel(mem *discordgo.Member) (string, error) {
+	guild, err := dclient.Guild(mem.GuildID)
+	checkErr(err, "get guild for voice channels")
+	for _, instance := range guild.VoiceStates {
+		if instance.UserID == mem.User.ID {
+			return instance.ChannelID, nil
+		}
+	}
+	return "", errors.New("person not in voice channel")
+}
 
 func checkErr(err error, key string) {
 	if err != nil {
