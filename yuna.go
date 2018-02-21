@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -138,12 +139,17 @@ func interpret(command string, mem *discordgo.Member) string {
 		}
 		c := make(chan string)
 		dvcontrol[mem.GuildID] = c
-		go voiceService(dclient, mem.GuildID, id, c)
+		go voiceService(voicedata{session: dclient, guildID: mem.GuildID, channelID: id, commandChannel: c})
 		returnValue = rundata.getRandomResponse("start_voice_connection")
 	case "end_voice_connection":
 		dvcontrol[mem.GuildID] <- "disconnect"
 		delete(dvcontrol, mem.GuildID)
 		returnValue = rundata.getRandomResponse("end_voice_connection")
+	case "create_temp_channel":
+		dvcontrol[strconv.Itoa(len(dvcontrol))] = make(chan string, 5)
+		channame := rundata.getRandomResponse("temp_channel_names")
+		go tempChannelManager(voicedata{session: dclient, guildID: mem.GuildID, channelName: channame, creatorID: mem.User.ID, commandChannel: dvcontrol[strconv.Itoa(len(dvcontrol))]})
+		returnValue = "I've created a temporary channel for you: " + channame
 	case "export":
 		if !authorized {
 			returnValue = rundata.getRandomResponse("not_authorized")
@@ -161,17 +167,6 @@ func interpret(command string, mem *discordgo.Member) string {
 }
 
 //Utility functions
-
-func getCurrentVoiceChannel(mem *discordgo.Member) (string, error) {
-	guild, err := dclient.Guild(mem.GuildID)
-	checkErr(err, "get guild for voice channels")
-	for _, instance := range guild.VoiceStates {
-		if instance.UserID == mem.User.ID {
-			return instance.ChannelID, nil
-		}
-	}
-	return "", errors.New("person not in voice channel")
-}
 
 func checkErr(err error, key string) {
 	if err != nil {
