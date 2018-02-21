@@ -59,7 +59,7 @@ func (db database) getRandomResponse(intent string) string {
 }
 
 func getDataFromRemote(configURL, key string) database {
-	resp, err := http.Get(os.Getenv(configURL))
+	resp, err := http.Get(configURL)
 	checkErr(err, "get config from remote")
 
 	var contents []byte
