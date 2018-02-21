@@ -34,13 +34,14 @@ func tempChannelManager(data voicedata) {
 
 	time.Sleep(time.Duration(5) * time.Second)
 
-	for exitFlag := false; exitFlag == false && len(getUsersInVoiceChannel(data.guildID, vchan.ID)) > 0; {
+	for len(getUsersInVoiceChannel(data.guildID, vchan.ID)) > 0 {
 		select {
 		case command := <-data.commandChannel:
 			switch command {
 			case "disconnect":
-				exitFlag = true
+				break
 			}
+		default:
 		}
 	}
 

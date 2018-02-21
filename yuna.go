@@ -146,9 +146,10 @@ func interpret(command string, mem *discordgo.Member) string {
 		delete(dvcontrol, mem.GuildID)
 		returnValue = rundata.getRandomResponse("end_voice_connection")
 	case "create_temp_channel":
-		dvcontrol[strconv.Itoa(len(dvcontrol))] = make(chan string, 5)
+		c := make(chan string, 5)
+		dvcontrol[strconv.Itoa(len(dvcontrol))] = c
 		channame := rundata.getRandomResponse("temp_channel_names")
-		go tempChannelManager(voicedata{session: dclient, guildID: mem.GuildID, channelName: channame, creatorID: mem.User.ID, commandChannel: dvcontrol[strconv.Itoa(len(dvcontrol))]})
+		go tempChannelManager(voicedata{session: dclient, guildID: mem.GuildID, channelName: channame, creatorID: mem.User.ID, commandChannel: c})
 		returnValue = "I've created a temporary channel for you: " + channame
 	case "export":
 		if !authorized {
@@ -250,6 +251,7 @@ func mute(user *discordgo.Member) error {
 }
 
 func shutdown() { //Shutdown the discord connection and save data
+	fmt.Println("Exiting...")
 	for _, c := range dvcontrol {
 		c <- "disconnect"
 	}
