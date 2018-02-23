@@ -67,13 +67,13 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		mem.GuildID = guild.ID
 
 		//Send a message back on the same channel with the feedback returned by interpret()
-		_, err = s.ChannelMessageSend(m.ChannelID, interpret(m.Content, mem))
+		_, err = s.ChannelMessageSend(m.ChannelID, interpret(m.Content, m.ChannelID, mem))
 		checkErr(err, "message recieved - send response")
 		fmt.Println(intentOf(m.Content, rundata.Models) + " " + m.Content)
 	}
 }
 
-func interpret(command string, mem *discordgo.Member) string {
+func interpret(command, channelID string, mem *discordgo.Member) string {
 	authorized := checkAuthorized(mem)
 	returnValue := ""
 
@@ -132,7 +132,7 @@ func interpret(command string, mem *discordgo.Member) string {
 		}
 		c := make(chan string)
 		dvcontrol[mem.GuildID] = c
-		go voiceService(voicedata{session: dclient, guildID: mem.GuildID, vChannelID: id, commandChan: c})
+		go voiceService(voicedata{session: dclient, guildID: mem.GuildID, vChannelID: id, commandChan: c, tChannelID: channelID})
 		returnValue = rundata.getRandomResponse("start_voice_connection")
 	case "end_voice_connection":
 		dvcontrol[mem.GuildID] <- "disconnect"

@@ -55,7 +55,7 @@ func tempChannelManager(data voicedata) {
 }
 
 func voiceService(data voicedata) {
-	if data.session == nil || data.guildID == "" || data.vChannelID == "" || data.commandChan == nil {
+	if data.session == nil || data.guildID == "" || data.vChannelID == "" || data.commandChan == nil || data.tChannelID == "" {
 		if data.returnChan != nil {
 			data.returnChan <- "error not enough data"
 		}
