@@ -9,25 +9,26 @@ import (
 )
 
 type voicedata struct {
-	session        *discordgo.Session
-	guildID        string
-	channelID      string
-	channelName    string
-	commandChannel chan string
-	returnChannel  chan string
-	creatorID      string
+	session      *discordgo.Session
+	guildID      string
+	vChannelID   string
+	vChannelName string
+	tChannelID   string
+	commandChan  chan string
+	returnChan   chan string
+	creatorID    string
 }
 
 func tempChannelManager(data voicedata) {
-	if data.session == nil || data.guildID == "" || data.channelName == "" || data.creatorID == "" || data.commandChannel == nil {
-		if data.returnChannel != nil {
-			data.returnChannel <- "error not enough data"
+	if data.session == nil || data.guildID == "" || data.vChannelName == "" || data.creatorID == "" || data.commandChan == nil {
+		if data.returnChan != nil {
+			data.returnChan <- "error not enough data"
 		}
 		fmt.Println("Not enough data.")
 		return
 	}
 
-	vchan, err := data.session.GuildChannelCreate(data.guildID, data.channelName, "voice")
+	vchan, err := data.session.GuildChannelCreate(data.guildID, data.vChannelName, "voice")
 	checkErr(err, "create temporary voice channel")
 	err = data.session.GuildMemberMove(data.guildID, data.creatorID, vchan.ID)
 	checkErr(err, "user move to new channel")
@@ -36,7 +37,7 @@ func tempChannelManager(data voicedata) {
 
 	for len(getUsersInVoiceChannel(data.guildID, vchan.ID)) > 0 {
 		select {
-		case command := <-data.commandChannel:
+		case command := <-data.commandChan:
 			switch command {
 			case "disconnect":
 				break
@@ -48,25 +49,29 @@ func tempChannelManager(data voicedata) {
 	_, err = data.session.ChannelDelete(vchan.ID)
 	checkErr(err, "delete temporary voice channel")
 
-	if data.returnChannel != nil {
-		data.returnChannel <- "done"
+	if data.returnChan != nil {
+		data.returnChan <- "done"
 	}
 }
 
 func voiceService(data voicedata) {
-	if data.session == nil || data.guildID == "" || data.channelID == "" || data.commandChannel == nil {
-		if data.returnChannel != nil {
-			data.returnChannel <- "error not enough data"
+	if data.session == nil || data.guildID == "" || data.vChannelID == "" || data.commandChan == nil {
+		if data.returnChan != nil {
+			data.returnChan <- "error not enough data"
 		}
 		return
 	}
 
-	dvclient, err := data.session.ChannelVoiceJoin(data.guildID, data.channelID, false, false)
+	dvclient, err := data.session.ChannelVoiceJoin(data.guildID, data.vChannelID, false, false)
+	if err.Error() == "timeout waiting for voice" {
+		data.session.ChannelMessageSend(data.tChannelID, "Sorry, I couldn't connect. Try again later.")
+		return
+	}
 	checkErr(err, "connect to voice channel")
 
 	for exitFlag := false; exitFlag == false; {
 		select {
-		case command := <-data.commandChannel:
+		case command := <-data.commandChan:
 			switch command {
 			case "disconnect":
 				exitFlag = true
@@ -77,8 +82,8 @@ func voiceService(data voicedata) {
 	dvclient.Disconnect()
 	dvclient.Close()
 
-	if data.returnChannel != nil {
-		data.returnChannel <- "done"
+	if data.returnChan != nil {
+		data.returnChan <- "done"
 	}
 }
 
