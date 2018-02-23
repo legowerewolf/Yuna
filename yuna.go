@@ -2,12 +2,10 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
-	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -16,12 +14,6 @@ import (
 	"github.com/legowerewolf/cryptowrapper"
 	"github.com/m90/go-chatbase"
 )
-
-//All fields are exported because of the JSON package
-type person struct {
-	DiscordID string   `json:"discordID"`
-	Names     []string `json:"names"`
-}
 
 var (
 	rundata   database
@@ -96,13 +88,14 @@ func interpret(command string, mem *discordgo.Member) string {
 			break
 		}
 		s := sanitize(command)
-		if len(getPeopleFromSlice(s)) == 0 {
+		p := rundata.getPeopleFromSlice(s)
+		if len(p) == 0 {
 			returnValue = "Sorry, but I couldn't find anybody by that name. Try again?"
 			break
 		}
 		returnValue = "Alright, I've muted "
 		users := []string{}
-		for _, user := range getPeopleFromSlice(s) {
+		for _, user := range p {
 			mem, err := dclient.GuildMember(mem.GuildID, user.DiscordID)
 			checkErr(err, "interpret mute - get guildmember for alias")
 			mute(mem)
@@ -123,7 +116,7 @@ func interpret(command string, mem *discordgo.Member) string {
 		rundata = getData()
 		returnValue = "Alright, I've reloaded my database from disk."
 	case "list_names":
-		person, _ := getPersonFromAlias(sanitize(command)[indexOf("for", sanitize(command))+1])
+		person, _ := rundata.getPersonFromAlias(sanitize(command)[indexOf("for", sanitize(command))+1])
 		returnValue = "That user is known as " + toEnglishList(person.Names)
 	case "play_music":
 		returnValue = "I understand you want me to play music. I don't quite know how to do that yet."
@@ -139,7 +132,7 @@ func interpret(command string, mem *discordgo.Member) string {
 		}
 		c := make(chan string)
 		dvcontrol[mem.GuildID] = c
-		go voiceService(voicedata{session: dclient, guildID: mem.GuildID, channelID: id, commandChannel: c})
+		go voiceService(voicedata{session: dclient, guildID: mem.GuildID, vChannelID: id, commandChan: c})
 		returnValue = rundata.getRandomResponse("start_voice_connection")
 	case "end_voice_connection":
 		dvcontrol[mem.GuildID] <- "disconnect"
@@ -149,7 +142,7 @@ func interpret(command string, mem *discordgo.Member) string {
 		c := make(chan string, 5)
 		dvcontrol[strconv.Itoa(len(dvcontrol))] = c
 		channame := rundata.getRandomResponse("temp_channel_names")
-		go tempChannelManager(voicedata{session: dclient, guildID: mem.GuildID, channelName: channame, creatorID: mem.User.ID, commandChannel: c})
+		go tempChannelManager(voicedata{session: dclient, guildID: mem.GuildID, vChannelName: channame, creatorID: mem.User.ID, commandChan: c})
 		returnValue = "I've created a temporary channel for you: " + channame
 	case "export":
 		if !authorized {
@@ -202,46 +195,6 @@ func sanitize(s string) []string { //Take a string, remove the punctuation, and 
 	}
 	words := strings.Split(s, " ")
 	return words
-}
-
-func getPersonFromAlias(alias string) (person, error) {
-	for _, person := range rundata.People { //Scan through people the bot is aware of
-		if alias[2:len(alias)-1] == person.DiscordID { //See if this is a mention (<@ ... >) of the person
-			return person, nil
-		}
-		for _, name := range person.Names { //Scan through names the bot knows for this person, ignoring case
-			if strings.ToLower(name) == strings.ToLower(alias) {
-				return person, nil
-			}
-		}
-
-	}
-
-	//The bot doesn't know this person. Add it to the registry and return the new person.
-	matched, _ := regexp.MatchString("(:?)([0-9])+", alias[2:len(alias)-1])
-	if len(alias[2:len(alias)-1]) == 18 && matched {
-		rundata.People = append(rundata.People, person{DiscordID: alias[2 : len(alias)-1]})
-	}
-	return person{}, errors.New("Could not find person with alias: " + alias)
-}
-
-func getPeopleFromSlice(s []string) []person {
-	ret := []person{}
-	if indexOf("and", s) != -1 {
-		andindex := indexOf("and", s)
-		for _, alias := range append(s[:andindex+1], s[andindex+1]) {
-			nperson, err := getPersonFromAlias(alias)
-			if err == nil {
-				ret = append(ret, nperson)
-			}
-		}
-	} else {
-		nperson, err := getPersonFromAlias(s[0])
-		if err == nil {
-			ret = append(ret, nperson)
-		}
-	}
-	return ret
 }
 
 func mute(user *discordgo.Member) error {

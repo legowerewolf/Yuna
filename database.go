@@ -2,12 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
 	"reflect"
+	"regexp"
+	"strings"
 
 	"github.com/legowerewolf/cryptowrapper"
 )
@@ -20,6 +23,11 @@ type database struct {
 	Models    map[string]string
 	Responses map[string][]string
 	local     bool
+}
+
+type person struct {
+	DiscordID string   `json:"discordID"`
+	Names     []string `json:"names"`
 }
 
 func getData() database {
@@ -56,6 +64,46 @@ func saveData() {
 func (db database) getRandomResponse(intent string) string {
 	responses := db.Responses[intent]
 	return responses[rand.Intn(len(responses))]
+}
+
+func (db database) getPersonFromAlias(alias string) (person, error) {
+	for _, person := range rundata.People { //Scan through people the bot is aware of
+		if alias[2:len(alias)-1] == person.DiscordID { //See if this is a mention (<@ ... >) of the person
+			return person, nil
+		}
+		for _, name := range person.Names { //Scan through names the bot knows for this person, ignoring case
+			if strings.ToLower(name) == strings.ToLower(alias) {
+				return person, nil
+			}
+		}
+
+	}
+
+	//The bot doesn't know this person. Add it to the registry and return the new person.
+	matched, _ := regexp.MatchString("(:?)([0-9])+", alias[2:len(alias)-1])
+	if len(alias[2:len(alias)-1]) == 18 && matched {
+		rundata.People = append(rundata.People, person{DiscordID: alias[2 : len(alias)-1]})
+	}
+	return person{}, errors.New("Could not find person with alias: " + alias)
+}
+
+func (db database) getPeopleFromSlice(s []string) []person {
+	ret := []person{}
+	if indexOf("and", s) != -1 {
+		andindex := indexOf("and", s)
+		for _, alias := range append(s[:andindex+1], s[andindex+1]) {
+			nperson, err := db.getPersonFromAlias(alias)
+			if err == nil {
+				ret = append(ret, nperson)
+			}
+		}
+	} else {
+		nperson, err := db.getPersonFromAlias(s[0])
+		if err == nil {
+			ret = append(ret, nperson)
+		}
+	}
+	return ret
 }
 
 func getDataFromRemote(configURL, key string) database {
