@@ -204,11 +204,13 @@ func mute(user *discordgo.Member) error {
 }
 
 func shutdown() { //Shutdown the discord connection and save data
-	fmt.Println("Exiting...")
+	fmt.Println("Sending disconnect signal...")
 	for _, c := range dvcontrol {
 		c <- "disconnect"
 	}
 	dclient.Close()
+	fmt.Println("Saving...")
 	saveData()
+	fmt.Println("Done.")
 	os.Exit(0)
 }
