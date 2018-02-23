@@ -9,7 +9,7 @@ ENV INITSYSTEM on
 
 # Resin WiFi setup
 RUN apk update && \ 
-    apk add dnsmasq
+    apk add dnsmasq curl
 RUN curl https://api.github.com/repos/resin-io/resin-wifi-connect/releases/latest -s \
     | grep -hoP 'browser_download_url": "\K.*%%RESIN_ARCH%%\.tar\.gz' \
     | xargs -n1 curl -Ls \
