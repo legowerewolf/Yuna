@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"reflect"
 	"regexp"
 
@@ -9,17 +10,19 @@ import (
 )
 
 //get the most accurate intent of a command from a map of regex models
-func intentOf(command string, models map[string]string) string {
-	intent := ""
+func intentOf(command string, intents map[string]intent) (intent, model string) {
 	maxScore := 0.0
-	for i, m := range models {
-		r := regexp.MustCompile(m)
-		r.Longest()
-		if float64(len(r.FindString(command)))/float64(len(command)) > maxScore {
-			intent = i
+	for _intent, _intentdata := range intents {
+		for _, _model := range _intentdata.Models {
+			r := regexp.MustCompile("(?i)" + _model)
+			r.Longest()
+			if float64(len(r.FindString(command)))/float64(len(command)) > maxScore {
+				intent = _intent
+				model = _model
+			}
 		}
 	}
-	return intent
+	return intent, model
 }
 
 //get the index of any value of any type in any list - to be added to as necessary
@@ -70,4 +73,8 @@ func toEnglishList(elements []string) string {
 		}
 	}
 	return ret
+}
+
+func getRandomString(s []string) string {
+	return s[rand.Intn(len(s))]
 }
