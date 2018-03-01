@@ -30,6 +30,8 @@ func tempChannelManager(data voicedata) {
 
 	vchan, err := data.session.GuildChannelCreate(data.guildID, data.vChannelName, "voice")
 	checkErr(err, "create temporary voice channel")
+	vchan, err = data.session.ChannelEditComplex(vchan.ID, &discordgo.ChannelEdit{Bitrate: 32000})
+	checkErr(err, "fix temporary channel bitrate")
 	err = data.session.GuildMemberMove(data.guildID, data.creatorID, vchan.ID)
 	checkErr(err, "user move to new channel")
 
