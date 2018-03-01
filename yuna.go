@@ -74,7 +74,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 func interpret(command, channelID string, mem *discordgo.Member) string {
 
-	intent, _ := intentOf(command, rundata.Intents)
+	intent, data := intentOf(command, rundata.Intents)
 
 	returnValue := ""
 
@@ -117,11 +117,20 @@ func interpret(command, channelID string, mem *discordgo.Member) string {
 			delete(dvcontrol, mem.GuildID)
 			returnValue = getRandomString(rundata.Intents[intent].Responses)
 		case "create_temp_channel":
-			c := make(chan string, 5)
-			dvcontrol[strconv.Itoa(len(dvcontrol))] = c
-			channame := getRandomString(rundata.Intents[intent].Extra1)
-			go tempChannelManager(voicedata{session: dclient, guildID: mem.GuildID, vChannelName: channame, creatorID: mem.User.ID, commandChan: c})
-			returnValue = "I've created a temporary channel for you: " + channame
+			var channame string
+			if len(data) > 0 {
+				channame = data[0]
+			} else {
+				channame = getRandomString(rundata.Intents[intent].Extra1)
+			}
+			if len(channame) < 2 || len(channame) > 100 {
+				returnValue = getRandomString(rundata.Errors["channel_name_too_short_long"])
+			} else {
+				c := make(chan string, 5)
+				dvcontrol[strconv.Itoa(len(dvcontrol))] = c
+				go tempChannelManager(voicedata{session: dclient, guildID: mem.GuildID, vChannelName: channame, creatorID: mem.User.ID, commandChan: c})
+				returnValue = "I've created a temporary channel for you: " + channame
+			}
 		default:
 			messageReport.SetNotHandled(true)
 			returnValue = getRandomString(rundata.Errors["unknown_intent"])

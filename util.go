@@ -5,24 +5,48 @@ import (
 	"math/rand"
 	"reflect"
 	"regexp"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 //get the most accurate intent of a command from a map of regex models
-func intentOf(command string, intents map[string]intent) (intent, model string) {
+func intentOf(command string, intents map[string]intent) (intent string, data []string) {
 	maxScore := 0.0
+	var model, match string
+
 	for _intent, _intentdata := range intents {
 		for _, _model := range _intentdata.Models {
-			r := regexp.MustCompile("(?i)" + _model)
+			r := regexp.MustCompile("(?i)" + strings.Replace(_model, "%PARAM%", "[A-Za-z0-9 ]+", -1))
 			r.Longest()
 			if float64(len(r.FindString(command)))/float64(len(command)) > maxScore {
 				intent = _intent
 				model = _model
+				match = r.FindString(command)
 			}
 		}
 	}
-	return intent, model
+
+	if submodels := strings.Split(model, "%PARAM%"); len(submodels) > 1 {
+		if submodels[len(submodels)-1] == "" {
+			submodels[len(submodels)-1] = "$"
+		}
+		for i := 0; i < len(submodels)-1; i++ {
+			//find the length of the first match
+			r := regexp.MustCompile("(?i)" + submodels[i])
+			r.Longest()
+			startIndex := r.FindStringIndex(match)[1]
+
+			//find the length of the second match
+			r = regexp.MustCompile("(?i)" + submodels[i+1])
+			r.Longest()
+			endIndex := r.FindStringIndex(match)[0]
+
+			//find and append the data
+			data = append(data, match[startIndex:endIndex])
+		}
+	}
+	return intent, data
 }
 
 //get the index of any value of any type in any list - to be added to as necessary
