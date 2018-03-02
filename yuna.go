@@ -116,8 +116,8 @@ func interpret(command, channelID string, mem *discordgo.Member) string {
 			returnValue = getRandomString(rundata.Intents[intent].Responses)
 		case "create_temp_channel":
 			var channame string
-			if len(data) > 0 {
-				channame = data[0]
+			if cn, prs := data["CHANNAME"]; prs {
+				channame = cn
 			} else {
 				channame = getRandomString(rundata.Intents[intent].Extra1)
 			}

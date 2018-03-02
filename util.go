@@ -11,13 +11,15 @@ import (
 )
 
 //get the most accurate intent of a command from a map of regex models
-func intentOf(command string, intents map[string]intent) (intent string, data []string) {
+func intentOf(command string, intents map[string]intent) (intent string, data map[string]string) {
 	maxScore := 0.0
 	var model, match string
 
 	for _intent, _intentdata := range intents {
 		for _, _model := range _intentdata.Models {
-			r := regexp.MustCompile("(?i)" + strings.Replace(_model, "%PARAM%", "[A-Za-z0-9 ]+", -1))
+			r := regexp.MustCompile("(?i)%\\w+%")
+			newModel := r.ReplaceAllString(_model, "[A-Za-z0-9 ]+")
+			r = regexp.MustCompile("(?i)" + newModel)
 			r.Longest()
 			if float64(len(r.FindString(command)))/float64(len(command)) > maxScore {
 				intent = _intent
@@ -27,23 +29,27 @@ func intentOf(command string, intents map[string]intent) (intent string, data []
 		}
 	}
 
-	if submodels := strings.Split(model, "%PARAM%"); len(submodels) > 1 {
+	data = make(map[string]string)
+	if submodels := strings.Split(model, "%"); len(submodels) > 1 && len(submodels)%2 == 1 {
 		if submodels[len(submodels)-1] == "" {
 			submodels[len(submodels)-1] = "$"
 		}
-		for i := 0; i < len(submodels)-1; i++ {
-			//find the length of the first match
+		offset := 0
+		for i := 0; i < len(submodels)-2; i += 2 {
+			//find the end of the first match
 			r := regexp.MustCompile("(?i)" + submodels[i])
 			r.Longest()
-			startIndex := r.FindStringIndex(match)[1]
+			startIndex := r.FindStringIndex(match[offset:])[1]
 
-			//find the length of the second match
-			r = regexp.MustCompile("(?i)" + submodels[i+1])
+			//find the beginning of the second match
+			r = regexp.MustCompile("(?i)" + submodels[i+2])
 			r.Longest()
-			endIndex := r.FindStringIndex(match)[0]
+			endIndex := r.FindStringIndex(match[offset:])[0]
+
+			offset = startIndex
 
 			//find and append the data
-			data = append(data, match[startIndex:endIndex])
+			data[submodels[i+1]] = match[startIndex:endIndex]
 		}
 	}
 	return intent, data
