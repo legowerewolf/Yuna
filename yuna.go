@@ -88,8 +88,6 @@ func interpret(command, channelID string, mem *discordgo.Member) string {
 		case "shutdown":
 			returnValue = "Alright. Goodbye!"
 			defer shutdown()
-		case "greeting":
-			returnValue = getRandomString(rundata.Intents[intent].Responses)
 		case "reload_data":
 			rundata = getData()
 			returnValue = "Alright, I've reloaded my database from disk."
@@ -132,8 +130,12 @@ func interpret(command, channelID string, mem *discordgo.Member) string {
 				returnValue = "I've created a temporary channel for you: " + channame
 			}
 		default:
-			messageReport.SetNotHandled(true)
-			returnValue = getRandomString(rundata.Errors["unknown_intent"])
+			if _, prs := rundata.Intents[intent]; prs {
+				returnValue = getRandomString(rundata.Intents[intent].Responses)
+			} else {
+				messageReport.SetNotHandled(true)
+				returnValue = getRandomString(rundata.Errors["unknown_intent"])
+			}
 		}
 		messageReport.Submit()
 	} else {
