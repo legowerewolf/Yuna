@@ -23,6 +23,7 @@ var (
 func main() {
 	//Load database
 	rundata = getData()
+	rundata.checkForUpdates()
 
 	//Build the Chatbase client
 	cclient = chatbase.New(rundata.APITokens["chatbase"])
@@ -67,18 +68,18 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		//Send a message back on the same channel with the feedback returned by interpret()
 		_, err = s.ChannelMessageSend(m.ChannelID, interpret(m.Content, m.ChannelID, mem))
 		checkErr(err, "message recieved - send response")
-		intent, _ := intentOf(m.Content, rundata.Intents)
+		intent, _ := rundata.intentOf(m.Content)
 		fmt.Println(intent + " " + m.Content)
 	}
 }
 
 func interpret(command, channelID string, mem *discordgo.Member) string {
 
-	intent, data := intentOf(command, rundata.Intents)
+	intent, data := rundata.intentOf(command)
 
 	returnValue := ""
 
-	if checkAuthorized(mem.User.ID, intent) {
+	if rundata.checkAuthorized(mem.User.ID, intent) {
 
 		messageReport := cclient.UserMessage(mem.User.ID, "Discord")
 		messageReport.SetMessage(command)
@@ -152,14 +153,6 @@ func checkErr(err error, key string) {
 	}
 }
 
-func checkAuthorized(userID, intent string) bool { //Check and see if the member has advanced permissions based on what roles they have.
-	person, _, _ := rundata.getPersonFromAlias(userID)
-	if person.PermissionLevel >= rundata.Intents[intent].PermissionLevel {
-		return true
-	}
-	return false
-}
-
 func sanitize(s string) []string { //Take a string, remove the punctuation, and return it as a []string.
 	punct := []string{",", ".", "!"}
 	for _, p := range punct {
@@ -176,7 +169,7 @@ func shutdown() { //Shutdown the discord connection and save data
 	}
 	dclient.Close()
 	fmt.Println("Saving...")
-	saveData()
+	rundata.save("./data/config.json")
 	fmt.Println("Done.")
 	os.Exit(0)
 }

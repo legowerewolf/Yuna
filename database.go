@@ -21,6 +21,7 @@ type database struct {
 	Intents   map[string]intent
 	Errors    map[string][]string
 	local     bool
+	SourceURL string
 }
 
 type person struct {
@@ -56,15 +57,49 @@ func getData() database {
 	return buildDatabaseFromRaw(raw, true)
 }
 
-func saveData() {
-	if reflect.DeepEqual(rundata, getData()) && rundata.local {
+func getDataFromRemote(configURL, key string) database {
+	resp, err := http.Get(configURL)
+	checkErr(err, "get config from remote")
+
+	var contents []byte
+	contents, err = ioutil.ReadAll(resp.Body)
+	checkErr(err, "read remote config")
+
+	raw, err := wrapper.SymmetricDecrypt(string(contents), os.Getenv("CONFIG_KEY"))
+	checkErr(err, "decrypt config")
+
+	db := buildDatabaseFromRaw(raw, false)
+	db.SourceURL = configURL
+
+	return db
+
+}
+
+func (db database) checkForUpdates() {
+	if db.SourceURL == "" {
 		return
 	}
-	dat, err := json.Marshal(rundata)
+	if os.Getenv("CONFIG_URL") != db.SourceURL {
+		db = getDataFromRemote(os.Getenv("CONFIG_URL"), os.Getenv("CONFIG_KEY"))
+	}
+}
+
+func buildDatabaseFromRaw(raw []byte, local bool) database {
+	var c database
+	json.Unmarshal(raw, &c)
+	c.local = local
+	return c
+}
+
+func (db database) save(path string) {
+	if reflect.DeepEqual(db, getData()) && db.local {
+		return
+	}
+	dat, err := json.Marshal(db)
 	if err != nil {
 		fmt.Println(err.Error())
 	}
-	ioutil.WriteFile("./data/config.json", dat, 0644)
+	ioutil.WriteFile(path, dat, 0644)
 }
 
 func (db database) getPersonFromAlias(alias string) (person, int, error) {
@@ -88,43 +123,56 @@ func (db database) getPersonFromAlias(alias string) (person, int, error) {
 	return person{}, 0, errors.New("Could not find person with alias: " + alias)
 }
 
-func (db database) getPeopleFromSlice(s []string) []person {
-	ret := []person{}
-	if indexOf("and", s) != -1 {
-		andindex := indexOf("and", s)
-		for _, alias := range append(s[:andindex+1], s[andindex+1]) {
-			nperson, _, err := db.getPersonFromAlias(alias)
-			if err == nil {
-				ret = append(ret, nperson)
+// Find the best-matching intent from a list of models and extract data from it.
+func (db database) intentOf(command string) (intent string, data map[string]string) {
+	maxScore := 0.0
+	var model, match string
+
+	for _intent, _intentdata := range db.Intents {
+		for _, _model := range _intentdata.Models {
+			r := regexp.MustCompile("(?i)%\\w+%")
+			newModel := r.ReplaceAllString(_model, "[A-Za-z0-9 ]+")
+			r = regexp.MustCompile("(?i)" + newModel)
+			r.Longest()
+			if float64(len(r.FindString(command)))/float64(len(command)) > maxScore {
+				intent = _intent
+				model = _model
+				match = r.FindString(command)
 			}
 		}
-	} else {
-		nperson, _, err := db.getPersonFromAlias(s[0])
-		if err == nil {
-			ret = append(ret, nperson)
+	}
+
+	data = make(map[string]string)
+	if submodels := strings.Split(model, "%"); len(submodels) > 1 && len(submodels)%2 == 1 {
+		if submodels[len(submodels)-1] == "" {
+			submodels[len(submodels)-1] = "$"
+		}
+		offset := 0
+		for i := 0; i < len(submodels)-2; i += 2 {
+			//find the end of the first match
+			r := regexp.MustCompile("(?i)" + submodels[i])
+			r.Longest()
+			startIndex := r.FindStringIndex(match[offset:])[1]
+
+			//find the beginning of the second match
+			r = regexp.MustCompile("(?i)" + submodels[i+2])
+			r.Longest()
+			endIndex := r.FindStringIndex(match[offset:])[0]
+
+			offset = startIndex
+
+			//find and append the data
+			data[submodels[i+1]] = match[startIndex:endIndex]
 		}
 	}
-	return ret
+	return intent, data
 }
 
-func getDataFromRemote(configURL, key string) database {
-	resp, err := http.Get(configURL)
-	checkErr(err, "get config from remote")
-
-	var contents []byte
-	contents, err = ioutil.ReadAll(resp.Body)
-	checkErr(err, "read remote config")
-
-	raw, err := wrapper.SymmetricDecrypt(string(contents), os.Getenv("CONFIG_KEY"))
-	checkErr(err, "decrypt config")
-
-	return buildDatabaseFromRaw(raw, false)
-
-}
-
-func buildDatabaseFromRaw(raw []byte, local bool) database {
-	var c database
-	json.Unmarshal(raw, &c)
-	c.local = local
-	return c
+// Check if the user has permission to run the command
+func (db database) checkAuthorized(userID, intent string) bool {
+	person, _, _ := db.getPersonFromAlias(userID)
+	if person.PermissionLevel >= db.Intents[intent].PermissionLevel {
+		return true
+	}
+	return false
 }
