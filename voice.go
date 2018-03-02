@@ -65,9 +65,11 @@ func voiceService(data voicedata) {
 	}
 
 	dvclient, err := data.session.ChannelVoiceJoin(data.guildID, data.vChannelID, false, false)
-	if err.Error() == "timeout waiting for voice" {
-		data.session.ChannelMessageSend(data.tChannelID, "Sorry, I couldn't connect. Try again later.")
-		return
+	if err != nil {
+		if err.Error() == "timeout waiting for voice" {
+			data.session.ChannelMessageSend(data.tChannelID, "Sorry, I couldn't connect. Try again later.")
+			return
+		}
 	}
 	checkErr(err, "connect to voice channel")
 
