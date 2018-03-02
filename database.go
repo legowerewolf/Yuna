@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/legowerewolf/cryptowrapper"
+	"github.com/legowerewolf/cryptowrapper/wrapper"
 )
 
 //All fields are exported because of the JSON package
@@ -115,7 +115,7 @@ func getDataFromRemote(configURL, key string) database {
 	contents, err = ioutil.ReadAll(resp.Body)
 	checkErr(err, "read remote config")
 
-	raw, err := cryptowrapper.SymmetricDecrypt(string(contents), os.Getenv("CONFIG_KEY"))
+	raw, err := wrapper.SymmetricDecrypt(string(contents), os.Getenv("CONFIG_KEY"))
 	checkErr(err, "decrypt config")
 
 	return buildDatabaseFromRaw(raw, false)
