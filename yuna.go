@@ -77,14 +77,9 @@ func interpret(command, channelID string, mem *discordgo.Member) string {
 
 	intent, data := rundata.intentOf(command)
 
-	returnValue := ""
+	returnValue, notHandled := "", false
 
 	if rundata.checkAuthorized(mem.User.ID, intent) {
-
-		messageReport := cclient.UserMessage(mem.User.ID, "Discord")
-		messageReport.SetMessage(command)
-		messageReport.SetIntent(intent)
-
 		switch intent {
 		case "shutdown":
 			returnValue = "Alright. Goodbye!"
@@ -134,14 +129,27 @@ func interpret(command, channelID string, mem *discordgo.Member) string {
 			if _, prs := rundata.Intents[intent]; prs {
 				returnValue = getRandomString(rundata.Intents[intent].Responses)
 			} else {
-				messageReport.SetNotHandled(true)
+				notHandled = true
 				returnValue = getRandomString(rundata.Errors["unknown_intent"])
 			}
 		}
-		messageReport.Submit()
+
 	} else {
 		returnValue = getRandomString(rundata.Errors["not_authorized"])
 	}
+
+	response, err := cclient.UserMessage(mem.User.ID, "Discord").SetMessage(command).SetIntent(intent).SetNotHandled(notHandled).Submit()
+	if err != nil || !response.Status.OK() {
+		fmt.Println(err)
+		fmt.Println(response.Reason)
+	}
+
+	response, err = cclient.AgentMessage(mem.User.ID, "Discord").SetMessage(returnValue).Submit()
+	if err != nil || !response.Status.OK() {
+		fmt.Println(err)
+		fmt.Println(response.Reason)
+	}
+
 	return returnValue
 }
 
