@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -10,23 +11,18 @@ import (
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/m90/go-chatbase"
 )
 
 var (
 	rundata   database
 	dclient   *discordgo.Session
 	dvcontrol map[string]chan string
-	cclient   *chatbase.Client
 )
 
 func main() {
 	//Load database
 	rundata = getData()
 	rundata.checkForUpdates()
-
-	//Build the Chatbase client
-	cclient = chatbase.New(rundata.APITokens["chatbase"])
 
 	//Build the Discord client
 	var err error
@@ -138,18 +134,9 @@ func interpret(command, channelID string, mem *discordgo.Member) string {
 		returnValue = getRandomString(rundata.Errors["not_authorized"])
 	}
 
-	response, err := cclient.UserMessage(mem.User.ID, "Discord").SetMessage(command).SetIntent(intent).SetNotHandled(notHandled).Submit()
-	if err != nil || !response.Status.OK() {
-		fmt.Println(err)
-		fmt.Println(response.Reason)
+	if notHandled {
+		ioutil.WriteFile("./data/errors.log", []byte(command+"\n"), 0644)
 	}
-
-	response, err = cclient.AgentMessage(mem.User.ID, "Discord").SetMessage(returnValue).Submit()
-	if err != nil || !response.Status.OK() {
-		fmt.Println(err)
-		fmt.Println(response.Reason)
-	}
-
 	return returnValue
 }
 
