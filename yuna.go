@@ -134,6 +134,9 @@ func interpret(command, channelID string, mem *discordgo.Member) string {
 		returnValue = getRandomString(rundata.Errors["not_authorized"])
 	}
 
+	chatbaseSubmit(Message{Apikey: rundata.APITokens["chatbase"], Creator: "user", Userid: mem.User.ID, Platform: "Discord", Message: command, Intent: intent, Nothandled: notHandled})
+	chatbaseSubmit(Message{Apikey: rundata.APITokens["chatbase"], Creator: "agent", Userid: mem.User.ID, Platform: "Discord", Message: returnValue})
+
 	if notHandled {
 		ioutil.WriteFile("./data/errors.log", []byte(command+"\n"), 0644)
 	}
