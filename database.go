@@ -76,12 +76,12 @@ func getDataFromRemote(configURL, key string) database {
 }
 
 func (db database) checkForUpdates() {
-	fmt.Println(os.Getenv("CONFIG_URL"))
-	fmt.Println(db.SourceURL)
 	if db.SourceURL == "" {
 		return
 	}
 	if os.Getenv("CONFIG_URL") != db.SourceURL {
+		fmt.Println(os.Getenv("CONFIG_URL"))
+		fmt.Println(db.SourceURL)
 		db = getDataFromRemote(os.Getenv("CONFIG_URL"), os.Getenv("CONFIG_KEY"))
 		fmt.Println("Config updated.")
 	}
