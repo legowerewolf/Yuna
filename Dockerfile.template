@@ -20,4 +20,4 @@ ENV INITSYSTEM on
 COPY --from=builder /go/bin/yuna /yuna
 
 #CMD ["bash", "start.sh"]
-CMD ["./Yuna"]
+CMD ["/yuna"]
