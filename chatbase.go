@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 )
@@ -33,7 +32,6 @@ func chatbaseSubmit(m Message) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
-	fmt.Println(resp)
 	if err != nil {
 		// handle err
 	}
