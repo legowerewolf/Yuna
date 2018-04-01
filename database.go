@@ -101,8 +101,11 @@ func buildDatabaseFromRaw(raw []byte, local bool) database {
 }
 
 func (db database) save(path string) {
-	if reflect.DeepEqual(db, getData()) && db.local {
-		return
+	_, err := ioutil.ReadFile("./data/config.json")
+	if err == nil {
+		if reflect.DeepEqual(db, getData()) && db.local {
+			return
+		}
 	}
 	dat, err := json.Marshal(db)
 	if err != nil {
