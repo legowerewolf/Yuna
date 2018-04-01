@@ -22,7 +22,7 @@ var (
 func main() {
 	//Load database
 	rundata = getData()
-	rundata.checkForUpdates()
+	rundata = rundata.checkForUpdates()
 
 	//Build the Discord client
 	var err error
