@@ -41,12 +41,14 @@ func getData() database {
 	var raw []byte
 	var err error
 
+	fmt.Println("getData called.")
+
 	raw, err = ioutil.ReadFile("./data/config.json")
 	if err != nil { // If config file not found in proper location
 		fmt.Println("No config file found. Checking /onboarding ...")
 		raw, err = ioutil.ReadFile("./onboarding/config.json")
 		if err != nil { // If config file not found in onboarding location
-			fmt.Println("No config file found... Checking remote...")
+			fmt.Println("No config file found. Checking remote...")
 			//grab a version from the url contained in an enironment variable and decrypt with the key found in an enviroment variable
 			if os.Getenv("CONFIG_URL") != "" && os.Getenv("CONFIG_KEY") != "" {
 				return getDataFromRemote(os.Getenv("CONFIG_URL"), os.Getenv("CONFIG_KEY"))
