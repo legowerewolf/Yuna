@@ -37,7 +37,7 @@ type intent struct {
 	PermissionLevel int
 }
 
-func getData() *database {
+func getData() (*database, error) {
 	var raw []byte
 	var err error
 
@@ -61,7 +61,7 @@ func getData() *database {
 	return buildDatabaseFromRaw(raw, true)
 }
 
-func getDataFromRemote(configURL, key string) *database {
+func getDataFromRemote(configURL, key string) (*database, error) {
 	resp, err := http.Get(configURL)
 	checkErr(err, "get config from remote")
 
@@ -72,12 +72,17 @@ func getDataFromRemote(configURL, key string) *database {
 	raw, err := wrapper.SymmetricDecrypt(string(contents), os.Getenv("CONFIG_KEY"))
 	checkErr(err, "decrypt config")
 
-	db := buildDatabaseFromRaw(raw, false)
+	db, err := buildDatabaseFromRaw(raw, false)
+
+	if err != nil {
+		return nil, err
+	}
+
 	db.SourceURL = configURL
 
 	db.save("./data/config.json")
 
-	return db
+	return db, nil
 
 }
 
@@ -89,20 +94,24 @@ func (db *database) checkForUpdates() {
 	fmt.Println(os.Getenv("CONFIG_URL"))
 	fmt.Println(db.SourceURL)
 	fmt.Println("Config updated.")
-	db = getDataFromRemote(os.Getenv("CONFIG_URL"), os.Getenv("CONFIG_KEY"))
+	ndb, err := getDataFromRemote(os.Getenv("CONFIG_URL"), os.Getenv("CONFIG_KEY"))
+	if err == nil {
+		db = ndb
+	}
 }
 
-func buildDatabaseFromRaw(raw []byte, local bool) *database {
+func buildDatabaseFromRaw(raw []byte, local bool) (*database, error) {
 	var c database
-	json.Unmarshal(raw, &c)
+	err := json.Unmarshal(raw, &c)
 	c.local = local
-	return &c
+	return &c, err
 }
 
 func (db database) save(path string) {
 	_, err := ioutil.ReadFile("./data/config.json")
 	if err == nil {
-		if reflect.DeepEqual(db, getData()) && db.local {
+		odb, _ := getData()
+		if reflect.DeepEqual(db, odb) && db.local {
 			return
 		}
 	}

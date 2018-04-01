@@ -22,12 +22,14 @@ var (
 func main() {
 	fmt.Println("Starting...")
 
+	var err error
+
 	//Load database
-	rundata = getData()
+	rundata, err = getData()
 	rundata.checkForUpdates()
 
 	//Build the Discord client
-	var err error
+
 	dclient, err = discordgo.New("Bot " + rundata.APITokens["discord"])
 	checkErr(err, "construct discord client")
 
@@ -83,7 +85,13 @@ func interpret(command, channelID string, mem *discordgo.Member) string {
 			returnValue = "Alright. Goodbye!"
 			defer shutdown()
 		case "reload_data":
-			rundata = getData()
+			temp, err := getData()
+			if err != nil {
+				returnValue = getRandomString(rundata.Errors["unable_to_reload_database"])
+			} else {
+				rundata = temp
+			}
+
 			returnValue = "Alright, I've reloaded my database from disk."
 		case "list_names":
 			person, _, _ := rundata.getPersonFromAlias(sanitize(command)[indexOf("for", sanitize(command))+1])
@@ -162,14 +170,28 @@ func sanitize(s string) []string { //Take a string, remove the punctuation, and 
 	return words
 }
 
-func shutdown() { //Shutdown the discord connection and save data
+func restart() {
+	cleanup(false)
+	go main()
+}
+
+func cleanup(exit bool) {
 	fmt.Println("Sending disconnect signal...")
 	for _, c := range dvcontrol {
 		c <- "disconnect"
 	}
+	dvcontrol = nil
 	dclient.Close()
+	dclient = nil
 	fmt.Println("Saving...")
 	rundata.save("./data/config.json")
+	rundata = nil
 	fmt.Println("Done.")
-	os.Exit(0)
+	if exit {
+		os.Exit(0)
+	}
+}
+
+func shutdown() { //Shutdown the discord connection and save data
+	cleanup(true)
 }
