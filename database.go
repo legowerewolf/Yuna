@@ -71,20 +71,22 @@ func getDataFromRemote(configURL, key string) database {
 	db := buildDatabaseFromRaw(raw, false)
 	db.SourceURL = configURL
 
+	db.save("./data/config.json")
+
 	return db
 
 }
 
-func (db database) checkForUpdates() {
-	if db.SourceURL == "" {
-		return
+func (db database) checkForUpdates() database {
+	if db.SourceURL == "" || os.Getenv("CONFIG_URL") == db.SourceURL {
+		return db
 	}
-	if os.Getenv("CONFIG_URL") != db.SourceURL {
-		fmt.Println(os.Getenv("CONFIG_URL"))
-		fmt.Println(db.SourceURL)
-		db = getDataFromRemote(os.Getenv("CONFIG_URL"), os.Getenv("CONFIG_KEY"))
-		fmt.Println("Config updated.")
-	}
+
+	fmt.Println(os.Getenv("CONFIG_URL"))
+	fmt.Println(db.SourceURL)
+	fmt.Println("Config updated.")
+	return getDataFromRemote(os.Getenv("CONFIG_URL"), os.Getenv("CONFIG_KEY"))
+
 }
 
 func buildDatabaseFromRaw(raw []byte, local bool) database {
