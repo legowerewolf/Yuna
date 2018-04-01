@@ -20,6 +20,8 @@ var (
 )
 
 func main() {
+	fmt.Println("Starting...")
+
 	//Load database
 	rundata = getData()
 	rundata = rundata.checkForUpdates()
