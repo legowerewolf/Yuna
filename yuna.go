@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	rundata   database
+	rundata   *database
 	dclient   *discordgo.Session
 	dvcontrol map[string]chan string
 )
@@ -24,7 +24,7 @@ func main() {
 
 	//Load database
 	rundata = getData()
-	rundata = rundata.checkForUpdates()
+	rundata.checkForUpdates()
 
 	//Build the Discord client
 	var err error

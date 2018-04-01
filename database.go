@@ -37,7 +37,7 @@ type intent struct {
 	PermissionLevel int
 }
 
-func getData() database {
+func getData() *database {
 	var raw []byte
 	var err error
 
@@ -61,7 +61,7 @@ func getData() database {
 	return buildDatabaseFromRaw(raw, true)
 }
 
-func getDataFromRemote(configURL, key string) database {
+func getDataFromRemote(configURL, key string) *database {
 	resp, err := http.Get(configURL)
 	checkErr(err, "get config from remote")
 
@@ -81,23 +81,22 @@ func getDataFromRemote(configURL, key string) database {
 
 }
 
-func (db database) checkForUpdates() database {
+func (db *database) checkForUpdates() {
 	if db.SourceURL == "" || os.Getenv("CONFIG_URL") == db.SourceURL {
-		return db
+		return
 	}
 
 	fmt.Println(os.Getenv("CONFIG_URL"))
 	fmt.Println(db.SourceURL)
 	fmt.Println("Config updated.")
-	return getDataFromRemote(os.Getenv("CONFIG_URL"), os.Getenv("CONFIG_KEY"))
-
+	db = getDataFromRemote(os.Getenv("CONFIG_URL"), os.Getenv("CONFIG_KEY"))
 }
 
-func buildDatabaseFromRaw(raw []byte, local bool) database {
+func buildDatabaseFromRaw(raw []byte, local bool) *database {
 	var c database
 	json.Unmarshal(raw, &c)
 	c.local = local
-	return c
+	return &c
 }
 
 func (db database) save(path string) {
