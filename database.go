@@ -41,8 +41,6 @@ func getData() (*database, error) {
 	var raw []byte
 	var err error
 
-	fmt.Println("getData called.")
-
 	raw, err = ioutil.ReadFile("./data/config.json")
 	if err != nil { // If config file not found in proper location
 		fmt.Println("No config file found. Checking /onboarding ...")
@@ -90,14 +88,12 @@ func (db *database) checkForUpdates() {
 	if db.SourceURL == "" || os.Getenv("CONFIG_URL") == db.SourceURL {
 		return
 	}
-
-	fmt.Println(os.Getenv("CONFIG_URL"))
-	fmt.Println(db.SourceURL)
-	fmt.Println("Config updated.")
 	ndb, err := getDataFromRemote(os.Getenv("CONFIG_URL"), os.Getenv("CONFIG_KEY"))
 	if err == nil {
 		db = ndb
+		fmt.Println("Config updated.")
 	}
+
 }
 
 func buildDatabaseFromRaw(raw []byte, local bool) (*database, error) {

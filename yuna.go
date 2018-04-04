@@ -89,8 +89,9 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		//Send a message back on the same channel with the feedback returned by interpret()
 		_, err = s.ChannelMessageSend(m.ChannelID, interpret(m.Content, m.ChannelID, mem))
 		checkErr(err, "message recieved - send response")
-		intent, _ := rundata.intentOf(m.Content)
-		fmt.Println(intent + " " + m.Content)
+
+		//intent, _ := rundata.intentOf(m.Content)
+		//fmt.Println(intent + " " + m.Content)
 	}
 }
 
