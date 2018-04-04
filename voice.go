@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -14,17 +13,12 @@ type voicedata struct {
 	vChannelID   string
 	vChannelName string
 	tChannelID   string
-	commandChan  chan string
-	returnChan   chan string
+	announceChan chan spdata
 	creatorID    string
 }
 
 func tempChannelManager(data voicedata) {
-	if data.session == nil || data.guildID == "" || data.vChannelName == "" || data.creatorID == "" || data.commandChan == nil {
-		if data.returnChan != nil {
-			data.returnChan <- "error not enough data"
-		}
-		fmt.Println("Not enough data.")
+	if data.session == nil || data.guildID == "" || data.vChannelName == "" || data.creatorID == "" || data.announceChan == nil {
 		return
 	}
 
@@ -35,13 +29,16 @@ func tempChannelManager(data voicedata) {
 	err = data.session.GuildMemberMove(data.guildID, data.creatorID, vchan.ID)
 	checkErr(err, "user move to new channel")
 
+	commandChan := make(chan string)
+	data.announceChan <- spdata{command: "register", id: "temp_chan " + vchan.ID, channel: commandChan}
+
 	time.Sleep(time.Duration(5) * time.Second)
 
 	for len(getUsersInVoiceChannel(data.guildID, vchan.ID)) > 0 {
 		select {
-		case command := <-data.commandChan:
+		case command := <-commandChan:
 			switch command {
-			case "disconnect":
+			case "terminate":
 				break
 			}
 		default:
@@ -51,16 +48,11 @@ func tempChannelManager(data voicedata) {
 	_, err = data.session.ChannelDelete(vchan.ID)
 	checkErr(err, "delete temporary voice channel")
 
-	if data.returnChan != nil {
-		data.returnChan <- "done"
-	}
+	data.announceChan <- spdata{command: "delete", id: "temp_chan " + vchan.ID}
 }
 
 func voiceService(data voicedata) {
-	if data.session == nil || data.guildID == "" || data.vChannelID == "" || data.commandChan == nil || data.tChannelID == "" {
-		if data.returnChan != nil {
-			data.returnChan <- "error not enough data"
-		}
+	if data.session == nil || data.guildID == "" || data.vChannelID == "" || data.announceChan == nil || data.tChannelID == "" {
 		return
 	}
 
@@ -73,11 +65,14 @@ func voiceService(data voicedata) {
 	}
 	checkErr(err, "connect to voice channel")
 
+	commandChan := make(chan string)
+	data.announceChan <- spdata{command: "register", id: "vconn " + data.guildID, channel: commandChan}
+
 	for exitFlag := false; exitFlag == false; {
 		select {
-		case command := <-data.commandChan:
+		case command := <-commandChan:
 			switch command {
-			case "disconnect":
+			case "terminate":
 				exitFlag = true
 			}
 		}
@@ -86,9 +81,7 @@ func voiceService(data voicedata) {
 	dvclient.Disconnect()
 	dvclient.Close()
 
-	if data.returnChan != nil {
-		data.returnChan <- "done"
-	}
+	data.announceChan <- spdata{command: "delete", id: "vconn " + data.guildID}
 }
 
 func getCurrentVoiceChannel(mem *discordgo.Member) (string, error) {

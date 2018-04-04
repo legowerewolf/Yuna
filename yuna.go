@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 
@@ -14,9 +13,11 @@ import (
 )
 
 var (
-	rundata   *database
-	dclient   *discordgo.Session
-	dvcontrol map[string]chan string
+	rundata *database
+	dclient *discordgo.Session
+
+	spcontrol     map[string]chan string
+	spcontrolchan chan spdata
 )
 
 func main() {
@@ -28,15 +29,17 @@ func main() {
 	rundata, err = getData()
 	rundata.checkForUpdates()
 
-	//Build the Discord client
+	//initialize subprocess control
+	spcontrol = make(map[string]chan string)
+	spcontrolchan = make(chan spdata)
 
+	//Build the Discord client
 	dclient, err = discordgo.New("Bot " + rundata.APITokens["discord"])
 	checkErr(err, "construct discord client")
 
 	//register discord listeners here
 	dclient.AddHandler(messageCreate)
 
-	dvcontrol = make(map[string]chan string)
 	//connect to Discord servers
 	checkErr(dclient.Open(), "open discord connection")
 
@@ -45,7 +48,25 @@ func main() {
 	fmt.Println("Yuna is now online.  Press CTRL-C to shut down.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
-	<-sc
+
+	for flag := false; flag == false; {
+		select {
+		case <-sc:
+			flag = true
+		case cd := <-spcontrolchan:
+			if cd.command == "register" {
+				spcontrol[cd.id] = cd.channel
+			} else if cd.command == "delete" {
+				delete(spcontrol, cd.id)
+			}
+		}
+	}
+}
+
+type spdata struct {
+	command string
+	id      string
+	channel chan string
 }
 
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -97,24 +118,21 @@ func interpret(command, channelID string, mem *discordgo.Member) string {
 			person, _, _ := rundata.getPersonFromAlias(sanitize(command)[indexOf("for", sanitize(command))+1])
 			returnValue = "That user is known as " + toEnglishList(person.Names)
 		case "play_music":
-			returnValue = "I understand you want me to play music. I don't quite know how to do that yet."
+			returnValue = getRandomString(rundata.Intents[intent].Responses)
 		case "start_voice_connection":
-			_, prs := dvcontrol[mem.GuildID]
-			if prs {
-				dvcontrol[mem.GuildID] <- "disconnect"
-			}
 			id, err := getCurrentVoiceChannel(mem)
 			if err != nil && err.Error() == "person not in voice channel" {
 				returnValue = getRandomString(rundata.Errors["user_not_in_voice_channel"])
 				break
 			}
-			c := make(chan string)
-			dvcontrol[mem.GuildID] = c
-			go voiceService(voicedata{session: dclient, guildID: mem.GuildID, vChannelID: id, commandChan: c, tChannelID: channelID})
+			_, prs := spcontrol[mem.GuildID]
+			if prs {
+				spcontrol[mem.GuildID] <- "terminate"
+			}
+			go voiceService(voicedata{session: dclient, guildID: mem.GuildID, vChannelID: id, announceChan: spcontrolchan, tChannelID: channelID})
 			returnValue = getRandomString(rundata.Intents[intent].Responses)
 		case "end_voice_connection":
-			dvcontrol[mem.GuildID] <- "disconnect"
-			delete(dvcontrol, mem.GuildID)
+			spcontrol["vconn "+mem.GuildID] <- "terminate"
 			returnValue = getRandomString(rundata.Intents[intent].Responses)
 		case "create_temp_channel":
 			var channame string
@@ -126,9 +144,7 @@ func interpret(command, channelID string, mem *discordgo.Member) string {
 			if len(channame) < 2 || len(channame) > 100 {
 				returnValue = getRandomString(rundata.Errors["channel_name_too_short_long"])
 			} else {
-				c := make(chan string, 5)
-				dvcontrol[strconv.Itoa(len(dvcontrol))] = c
-				go tempChannelManager(voicedata{session: dclient, guildID: mem.GuildID, vChannelName: channame, creatorID: mem.User.ID, commandChan: c})
+				go tempChannelManager(voicedata{session: dclient, guildID: mem.GuildID, vChannelName: channame, creatorID: mem.User.ID, announceChan: spcontrolchan})
 				returnValue = "I've created a temporary channel for you: " + channame
 			}
 		default:
@@ -177,10 +193,10 @@ func restart() {
 
 func cleanup(exit bool) {
 	fmt.Println("Sending disconnect signal...")
-	for _, c := range dvcontrol {
-		c <- "disconnect"
+	for _, c := range spcontrol {
+		c <- "terminate"
 	}
-	dvcontrol = nil
+	spcontrol = nil
 	dclient.Close()
 	dclient = nil
 	fmt.Println("Saving...")
